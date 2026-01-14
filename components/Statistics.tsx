@@ -309,7 +309,6 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
       currentY = await captureAndAddSection(doc, `
         <div style="text-align:center; margin-bottom: 25px;">
           <h1 style="font-size:26pt; color:#2563eb; text-transform:uppercase; margin-bottom:5px; font-weight:bold;">Phiếu theo dõi học tập</h1>
-          <p style="font-size:12pt; color:#555;">Học kỳ I - Năm học 2024 - 2025</p>
         </div>
         <div style="display:flex; justify-content:space-between; margin-bottom:20px; border-top: 3px solid #2563eb; border-bottom: 3px solid #2563eb; padding: 15px 0;">
           <div style="width: 60%;">
@@ -317,7 +316,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
             <p style="margin:5px 0; font-size:13pt;"><strong>Lớp đào tạo:</strong> ${selectedStudent['TÊN LỚP']} (Khối ${selectedStudent['KHỐI']})</p>
           </div>
           <div style="width: 40%; text-align:right;">
-            <p style="margin:5px 0; font-size:13pt;"><strong>Mã học sinh:</strong> HS-${String(selectedStudent['STT']).padStart(4, '0')}</p>
+            <p style="margin:5px 0; font-size:13pt;"><strong>Ngày tham gia:</strong> ${formatDateVN(selectedStudent['NGÀY BẮT ĐẦU'])}</p>
             <p style="margin:5px 0; font-size:13pt;"><strong>Ngày in phiếu:</strong> ${today.toLocaleDateString('vi-VN')}</p>
           </div>
         </div>
@@ -374,7 +373,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
 
         const finalCanvas = await html2canvas(chartCaptureContainer, { 
           scale: 4, 
-          useCORS: true,
+          useCORS: true, 
           logging: false 
         });
         const finalImgData = finalCanvas.toDataURL('image/jpeg', 1.0);
