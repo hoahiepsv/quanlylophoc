@@ -7,53 +7,13 @@ import Statistics from './components/Statistics';
 import TeacherScheduleComponent from './components/TeacherSchedule';
 import Attendance from './components/Attendance';
 
-// Khai báo interface cho AI Studio API
-declare global {
-  interface AIStudio {
-    hasSelectedApiKey: () => Promise<boolean>;
-    openSelectKey: () => Promise<void>;
-  }
-
-  interface Window {
-    aistudio?: AIStudio;
-  }
-}
-
 const App: React.FC = () => {
-  // Trạng thái đăng nhập và cấu hình
+  // Authentication & Settings
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState({ username: '', password: '' });
   const [modelMode, setModelMode] = useState<ModelMode>(ModelMode.FLASH);
-  const [hasApiKey, setHasApiKey] = useState(false);
 
-  // Kiểm tra API Key khi khởi chạy
-  const checkApiKeyStatus = useCallback(async () => {
-    if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
-      const selected = await window.aistudio.hasSelectedApiKey();
-      setHasApiKey(selected);
-    }
-  }, []);
-
-  useEffect(() => {
-    checkApiKeyStatus();
-  }, [checkApiKeyStatus]);
-
-  // Hàm mở trình chọn Key (Dùng để nhập Key mới cho trình duyệt này)
-  const handleManageKey = async () => {
-    if (window.aistudio && typeof window.aistudio.openSelectKey === 'function') {
-      try {
-        await window.aistudio.openSelectKey();
-        // Sau khi mở dialog, giả định người dùng đã thao tác chọn key
-        setHasApiKey(true);
-      } catch (err) {
-        console.error("Lỗi khi mở trình chọn key:", err);
-      }
-    } else {
-      alert("Hệ thống quản lý Key không khả dụng trên trình duyệt này.");
-    }
-  };
-
-  // State dữ liệu
+  // Data State
   const [students, setStudents] = useState<Student[]>([]);
   const [teacherSchedules, setTeacherSchedules] = useState<TeacherSchedule[]>([]);
   const [loading, setLoading] = useState(false);
@@ -61,14 +21,18 @@ const App: React.FC = () => {
   const [tempSelection, setTempSelection] = useState<string>('');
   const [selectedForEdit, setSelectedForEdit] = useState<Student | null>(null);
 
+  // Helper: Chuyển đổi định dạng ngày sang dd/mm/yyyy và xoá phần giờ
   const formatDateVN = (dateStr: string) => {
     if (!dateStr) return '';
     const clean = dateStr.split(/[T ]/)[0];
     const parts = clean.split('-');
-    if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
     return clean;
   };
 
+  // Fetch real data from Datasheets
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -80,13 +44,7 @@ const App: React.FC = () => {
       setTeacherSchedules(Array.isArray(teacherData) ? teacherData : []);
     } catch (error: any) {
       console.error("Lỗi đồng bộ dữ liệu:", error);
-      // Xử lý lỗi API Key cụ thể
-      if (error.message && error.message.includes("Requested entity was not found")) {
-        setHasApiKey(false);
-        alert("API Key không hợp lệ hoặc đã hết hạn trên trình duyệt này. Vui lòng chọn lại khóa.");
-      } else {
-        alert(error.message || "Lỗi tải dữ liệu. Vui lòng kiểm tra kết nối.");
-      }
+      alert(error.message || "Lỗi tải dữ liệu. Vui lòng kiểm tra Apps Script.");
       setStudents([]);
     } finally {
       setLoading(false);
@@ -94,7 +52,9 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (isLoggedIn) loadData();
+    if (isLoggedIn) {
+      loadData();
+    }
   }, [isLoggedIn, loadData]);
 
   const handleLogin = (e: React.FormEvent) => {
@@ -106,9 +66,45 @@ const App: React.FC = () => {
     }
   };
 
+  const handleAddStudent = async (data: Partial<Student>) => {
+    setLoading(true);
+    try {
+      await apiService.saveStudent('addData', data);
+      alert("Đã thêm học sinh thành công!");
+      await loadData();
+      setActiveTab('list');
+    } catch (error: any) {
+      alert("Không thể thêm: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateStudent = async (data: Partial<Student>) => {
+    if (!selectedForEdit?.rowIndex) return;
+    setLoading(true);
+    try {
+      await apiService.saveStudent('updateData', data, selectedForEdit.rowIndex);
+      alert("Cập nhật thông tin thành công!");
+      await loadData();
+      setActiveTab('list');
+      setSelectedForEdit(null);
+      setTempSelection('');
+    } catch (error: any) {
+      alert("Lỗi cập nhật: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Safe sorting
   const sortedStudents = useMemo(() => {
     if (!Array.isArray(students)) return [];
-    return [...students].sort((a, b) => parseInt(String(a['KHỐI'] || '0')) - parseInt(String(b['KHỐI'] || '0')));
+    return [...students].sort((a, b) => {
+      const kA = parseInt(String(a['KHỐI'] || '0'));
+      const kB = parseInt(String(b['KHỐI'] || '0'));
+      return kA - kB;
+    });
   }, [students]);
 
   if (!isLoggedIn) {
@@ -122,20 +118,36 @@ const App: React.FC = () => {
               </svg>
             </div>
             <h1 className="text-2xl font-bold text-gray-800 uppercase tracking-tight">Hệ Thống Quản Lý</h1>
-            <p className="text-gray-500 text-sm mt-1">Vui lòng đăng nhập để tiếp tục</p>
+            <p className="text-gray-500 text-sm mt-1">Vui lòng đăng nhập để quản lý lớp học</p>
           </div>
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Tên đăng nhập</label>
-              <input type="text" value={user.username} onChange={(e) => setUser({...user, username: e.target.value})} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" placeholder="lehoahiep" />
+              <input 
+                type="text" 
+                value={user.username}
+                onChange={(e) => setUser({...user, username: e.target.value})}
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all" 
+                placeholder="lehoahiep"
+              />
             </div>
             <div>
               <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Mật khẩu</label>
-              <input type="password" value={user.password} onChange={(e) => setUser({...user, password: e.target.value})} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" placeholder="••••••••" />
+              <input 
+                type="password" 
+                value={user.password}
+                onChange={(e) => setUser({...user, password: e.target.value})}
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all" 
+                placeholder="••••••••"
+              />
             </div>
-            <button className="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-3.5 rounded-xl shadow-lg transition-all active:scale-95">ĐĂNG NHẬP NGAY</button>
+            <button className="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg active:scale-95">
+              ĐĂNG NHẬP NGAY
+            </button>
           </form>
-          <div className="mt-8 text-center text-[10px] text-gray-400 italic">Create by Hoà Hiệp AI – 0983.676.470</div>
+          <div className="mt-8 text-center text-[10px] text-gray-400 italic">
+            Create by Hoà Hiệp AI – 0983.676.470
+          </div>
         </div>
       </div>
     );
@@ -151,34 +163,25 @@ const App: React.FC = () => {
             </div>
             <div>
               <h1 className="text-xl font-bold tracking-tight uppercase">QUẢN LÝ LỚP HỌC</h1>
-              <p className="text-[10px] opacity-75">Sử dụng API Key linh hoạt cho mọi trình duyệt</p>
+              <p className="text-[10px] opacity-75">Đồng bộ Datasheet Realtime v1.5</p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-4">
-            <div className="flex flex-col items-end">
-              <button
-                onClick={handleManageKey}
-                className={`flex items-center gap-2 px-4 py-1.5 rounded-full transition-all active:scale-95 shadow-md border ${
-                  hasApiKey 
-                  ? 'bg-emerald-500/10 border-emerald-400 text-emerald-100 hover:bg-emerald-500/20' 
-                  : 'bg-amber-500/10 border-amber-400 text-amber-100 hover:bg-amber-500/20 animate-pulse'
-                }`}
-              >
-                <div className={`w-2 h-2 rounded-full ${hasApiKey ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]' : 'bg-amber-400 shadow-[0_0_8px_#fbbf24]'}`}></div>
-                <span className="text-[10px] font-black uppercase tracking-wider">
-                  {hasApiKey ? 'API KEY: ĐÃ KẾT NỐI' : 'NHẬP API KEY'}
-                </span>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                </svg>
-              </button>
-              <span className="text-[8px] opacity-50 mt-1 uppercase font-bold">Dành cho trình duyệt này</span>
-            </div>
-
+            {/* Fix: Removed API Key UI as per guidelines - API Key is handled via process.env.API_KEY */}
             <div className="flex items-center bg-blue-900/50 rounded-full p-1 border border-blue-700">
-              <button onClick={() => setModelMode(ModelMode.FLASH)} className={`px-4 py-1 rounded-full text-[10px] md:text-xs font-semibold transition-all ${modelMode === ModelMode.FLASH ? 'bg-white text-blue-800' : 'text-blue-200 hover:text-white'}`}>Flash</button>
-              <button onClick={() => setModelMode(ModelMode.PRO)} className={`px-4 py-1 rounded-full text-[10px] md:text-xs font-semibold transition-all ${modelMode === ModelMode.PRO ? 'bg-white text-blue-800' : 'text-blue-200 hover:text-white'}`}>Pro</button>
+              <button 
+                onClick={() => setModelMode(ModelMode.FLASH)}
+                className={`px-4 py-1 rounded-full text-[10px] md:text-xs font-semibold transition-all ${modelMode === ModelMode.FLASH ? 'bg-white text-blue-800' : 'text-blue-200 hover:text-white'}`}
+              >
+                Flash
+              </button>
+              <button 
+                onClick={() => setModelMode(ModelMode.PRO)}
+                className={`px-4 py-1 rounded-full text-[10px] md:text-xs font-semibold transition-all ${modelMode === ModelMode.PRO ? 'bg-white text-blue-800' : 'text-blue-200 hover:text-white'}`}
+              >
+                Pro
+              </button>
             </div>
           </div>
         </div>
@@ -195,8 +198,18 @@ const App: React.FC = () => {
             ].map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => { setActiveTab(tab.id as TabType); if(tab.id !== 'update') { setSelectedForEdit(null); setTempSelection(''); } }}
-                className={`flex items-center gap-2 px-4 py-3 border-b-4 font-bold text-sm transition-all whitespace-nowrap ${activeTab === tab.id ? 'border-white bg-white/10 text-white' : 'border-transparent text-blue-200 hover:text-white hover:bg-white/5'}`}
+                onClick={() => {
+                  setActiveTab(tab.id as TabType);
+                  if(tab.id !== 'update') {
+                    setSelectedForEdit(null);
+                    setTempSelection('');
+                  }
+                }}
+                className={`flex items-center gap-2 px-4 py-3 border-b-4 font-bold text-sm transition-all whitespace-nowrap ${
+                  activeTab === tab.id 
+                  ? 'border-white bg-white/10 text-white' 
+                  : 'border-transparent text-blue-200 hover:text-white hover:bg-white/5'
+                }`}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={tab.icon} />
@@ -259,44 +272,130 @@ const App: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-6 py-5 text-center">
-                        <button onClick={() => { setTempSelection(student['HỌ TÊN HS']); setSelectedForEdit(student); setActiveTab('update'); }} className="bg-blue-600 text-white hover:bg-blue-700 px-5 py-2 rounded-xl text-xs font-black transition-all shadow-md active:scale-95">SỬA</button>
+                        <button 
+                          onClick={() => { 
+                            setTempSelection(student['HỌ TÊN HS']);
+                            setSelectedForEdit(student); 
+                            setActiveTab('update'); 
+                          }}
+                          className="bg-blue-600 text-white hover:bg-blue-700 px-5 py-2 rounded-xl text-xs font-black transition-all shadow-md active:scale-95"
+                        >
+                          SỬA
+                        </button>
                       </td>
                     </tr>
                   ))}
+                  {sortedStudents.length === 0 && !loading && (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-32 text-center">
+                        <div className="flex flex-col items-center opacity-20">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                          </svg>
+                          <p className="text-xl font-black">CHƯA CÓ HỌC SINH NÀO</p>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
         )}
 
-        {activeTab === 'attendance' && <Attendance students={students} onRefresh={loadData} />}
-        {activeTab === 'add' && <div className="max-w-5xl mx-auto"><StudentForm title="Ghi danh học sinh mới" onSubmit={async (data) => { setLoading(true); try { await apiService.saveStudent('addData', data); alert("Đã thêm thành công!"); await loadData(); setActiveTab('list'); } catch (e: any) { alert(e.message); } finally { setLoading(false); } }} teacherSchedules={teacherSchedules} /></div>}
+        {activeTab === 'attendance' && (
+          <Attendance students={students} onRefresh={loadData} />
+        )}
+
+        {activeTab === 'add' && (
+          <div className="max-w-5xl mx-auto">
+            <StudentForm 
+              title="Ghi danh học sinh mới" 
+              onSubmit={handleAddStudent}
+              teacherSchedules={teacherSchedules}
+            />
+          </div>
+        )}
+
         {activeTab === 'update' && (
           <div className="max-w-5xl mx-auto space-y-8">
             <div className="bg-white p-8 rounded-2xl shadow-xl border border-blue-50">
-               <h3 className="font-black text-blue-900 mb-6 flex items-center gap-3"><div className="p-2 bg-blue-100 rounded-lg"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg></div>TRÌNH QUẢN LÝ CẬP NHẬT</h3>
+               <h3 className="font-black text-blue-900 mb-6 flex items-center gap-3">
+                 <div className="p-2 bg-blue-100 rounded-lg">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                 </div>
+                 TRÌNH QUẢN LÝ CẬP NHẬT
+               </h3>
                <div className="flex flex-col md:flex-row gap-4">
-                 <select className="flex-grow p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm font-bold text-gray-700" onChange={(e) => { setTempSelection(e.target.value); setSelectedForEdit(null); }} value={tempSelection}>
+                 <select 
+                    className="flex-grow p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm font-bold text-gray-700"
+                    onChange={(e) => {
+                      setTempSelection(e.target.value);
+                      setSelectedForEdit(null); // Reset form visibility
+                    }}
+                    value={tempSelection}
+                 >
                     <option value="">-- Chọn học sinh cần chỉnh sửa --</option>
-                    {sortedStudents.map((s, idx) => <option key={idx} value={s['HỌ TÊN HS']}>{s['HỌ TÊN HS']} (Lớp {s['KHỐI']})</option>)}
+                    {sortedStudents.map((s, idx) => (
+                      <option key={idx} value={s['HỌ TÊN HS']}>{s['HỌ TÊN HS']} (Lớp {s['KHỐI']})</option>
+                    ))}
                  </select>
-                 <button onClick={() => { const student = students.find(s => s['HỌ TÊN HS'] === tempSelection); if(student) setSelectedForEdit(student); else alert("Vui lòng chọn học sinh hợp lệ!"); }} disabled={!tempSelection} className={`px-8 py-4 rounded-xl font-black shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${tempSelection ? 'bg-blue-700 text-white hover:bg-blue-800' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>MỞ BIỂU MẪU CẬP NHẬT</button>
+                 <button
+                  onClick={() => {
+                    const student = students.find(s => s['HỌ TÊN HS'] === tempSelection);
+                    if(student) setSelectedForEdit(student);
+                    else alert("Vui lòng chọn học sinh hợp lệ!");
+                  }}
+                  disabled={!tempSelection}
+                  className={`px-8 py-4 rounded-xl font-black shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${
+                    tempSelection 
+                    ? 'bg-blue-700 text-white hover:bg-blue-800' 
+                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  }`}
+                 >
+                   MỞ BIỂU MẪU CẬP NHẬT
+                 </button>
                </div>
             </div>
-            {selectedForEdit && <div className="animate-slideUp"><StudentForm title={`Hiệu chỉnh: ${selectedForEdit['HỌ TÊN HS']}`} initialData={selectedForEdit} onSubmit={async (data) => { if (!selectedForEdit?.rowIndex) return; setLoading(true); try { await apiService.saveStudent('updateData', data, selectedForEdit.rowIndex); alert("Cập nhật thành công!"); await loadData(); setActiveTab('list'); setSelectedForEdit(null); setTempSelection(''); } catch (e: any) { alert(e.message); } finally { setLoading(false); } }} teacherSchedules={teacherSchedules} /></div>}
+
+            {selectedForEdit && (
+              <div className="animate-slideUp">
+                <StudentForm 
+                  title={`Hiệu chỉnh: ${selectedForEdit['HỌ TÊN HS']}`} 
+                  initialData={selectedForEdit}
+                  onSubmit={handleUpdateStudent}
+                  teacherSchedules={teacherSchedules}
+                />
+              </div>
+            )}
           </div>
         )}
-        {activeTab === 'stats' && <Statistics students={sortedStudents} />}
-        {activeTab === 'teacherSchedule' && <TeacherScheduleComponent />}
+
+        {activeTab === 'stats' && (
+          <Statistics students={sortedStudents} />
+        )}
+
+        {activeTab === 'teacherSchedule' && (
+          <TeacherScheduleComponent />
+        )}
       </main>
 
       <footer className="bg-white border-t border-gray-100 py-10 mt-auto">
         <div className="container mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="flex items-center gap-3">
-             <div className="w-10 h-10 bg-blue-800 rounded-xl flex items-center justify-center shadow-lg"><span className="text-white font-black text-lg">HA</span></div>
-             <div><span className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] block">Hệ Thống Quản Lý</span><span className="text-sm text-blue-900 font-black">HOÀ HIỆP AI © 2024</span></div>
+             <div className="w-10 h-10 bg-blue-800 rounded-xl flex items-center justify-center shadow-lg">
+               <span className="text-white font-black text-lg">HA</span>
+             </div>
+             <div>
+              <span className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] block">Hệ Thống Quản Lý</span>
+              <span className="text-sm text-blue-900 font-black">HOÀ HIỆP AI © 2024</span>
+             </div>
           </div>
-          <div className="text-xs md:text-sm font-black text-gray-400 italic">Zalo hỗ trợ kỹ thuật: <span className="text-blue-600">0983.676.470</span></div>
+          <div className="text-xs md:text-sm font-black text-gray-400 italic">
+            Zalo hỗ trợ kỹ thuật: <span className="text-blue-600">0983.676.470</span>
+          </div>
         </div>
       </footer>
     </div>
