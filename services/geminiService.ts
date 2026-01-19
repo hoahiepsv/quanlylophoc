@@ -3,18 +3,16 @@ import { GoogleGenAI } from "@google/genai";
 import { ModelMode } from "../types";
 
 /**
- * Helper to get the API Key from localStorage or environment
+ * Gemini Service - Handles AI analysis using Google GenAI SDK.
  */
-const getApiKey = () => {
-  return localStorage.getItem('gemini_api_key') || process.env.API_KEY || '';
-};
 
 export const geminiService = {
   /**
    * Analyzes student statistics using Gemini model.
    */
   async analyzeStats(data: any, mode: ModelMode) {
-    const ai = new GoogleGenAI({ apiKey: getApiKey() });
+    // Fix: Always initialize GoogleGenAI with process.env.API_KEY directly.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const prompt = `
       Hãy phân tích dữ liệu học sinh sau đây và đưa ra nhận xét chuyên sâu:
       ${JSON.stringify(data)}
@@ -30,7 +28,7 @@ export const geminiService = {
       model: mode,
       contents: prompt,
       config: {
-        thinkingConfig: mode === ModelMode.PRO ? { thinkingBudget: 4000 } : undefined
+        thinkingConfig: mode === ModelMode.PRO ? { thinkingBudget: 32768 } : undefined
       }
     });
 
@@ -41,7 +39,8 @@ export const geminiService = {
    * Generates a professional summary for PDF reports.
    */
   async generateReportContent(type: 'class' | 'student', data: any) {
-    const ai = new GoogleGenAI({ apiKey: getApiKey() });
+    // Fix: Always initialize GoogleGenAI with process.env.API_KEY directly.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     let prompt = "";
 
     if (type === 'class') {
