@@ -5,16 +5,13 @@ import { apiService } from './services/apiService';
 import StudentForm from './components/StudentForm';
 import Statistics from './components/Statistics';
 import TeacherScheduleComponent from './components/TeacherSchedule';
+import Attendance from './components/Attendance';
 
 const App: React.FC = () => {
   // Authentication & Settings
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState({ username: '', password: '' });
   const [modelMode, setModelMode] = useState<ModelMode>(ModelMode.FLASH);
-
-  // API Key Management
-  const [apiKey, setApiKey] = useState<string>('');
-  const [isEditingKey, setIsEditingKey] = useState<boolean>(true);
 
   // Data State
   const [students, setStudents] = useState<Student[]>([]);
@@ -23,29 +20,6 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('list');
   const [tempSelection, setTempSelection] = useState<string>('');
   const [selectedForEdit, setSelectedForEdit] = useState<Student | null>(null);
-
-  // Load API Key from localStorage on mount
-  useEffect(() => {
-    const savedKey = localStorage.getItem('gemini_api_key');
-    if (savedKey) {
-      setApiKey(savedKey);
-      setIsEditingKey(false);
-    }
-  }, []);
-
-  const handleSaveApiKey = () => {
-    if (isEditingKey) {
-      if (!apiKey.trim()) {
-        alert("Vui lòng nhập API Key!");
-        return;
-      }
-      localStorage.setItem('gemini_api_key', apiKey.trim());
-      setIsEditingKey(false);
-      alert("Đã lưu API Key vào trình duyệt thành công!");
-    } else {
-      setIsEditingKey(true);
-    }
-  };
 
   // Helper: Chuyển đổi định dạng ngày sang dd/mm/yyyy và xoá phần giờ
   const formatDateVN = (dateStr: string) => {
@@ -194,35 +168,7 @@ const App: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-4">
-            {/* API Key Management UI */}
-            <div className="flex items-center gap-2 bg-blue-900/60 p-1.5 rounded-xl border border-blue-700/50 shadow-inner">
-              <div className="flex flex-col">
-                <span className="text-[8px] font-black text-blue-300 uppercase leading-none mb-1">Mã API Gemini</span>
-                <input 
-                  type={isEditingKey ? "text" : "password"}
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  disabled={!isEditingKey}
-                  placeholder="Nhập API Key..."
-                  className={`px-3 py-1 text-xs rounded-lg transition-all outline-none w-32 md:w-48 font-mono ${
-                    isEditingKey 
-                    ? 'bg-white text-gray-800 ring-2 ring-blue-500' 
-                    : 'bg-blue-800/50 text-blue-200 border border-blue-700/50'
-                  }`}
-                />
-              </div>
-              <button 
-                onClick={handleSaveApiKey}
-                className={`px-4 py-2.5 rounded-lg text-[10px] font-black transition-all active:scale-95 shadow-md ${
-                  isEditingKey 
-                  ? 'bg-emerald-500 hover:bg-emerald-600 text-white' 
-                  : 'bg-blue-700 hover:bg-blue-600 text-blue-100'
-                }`}
-              >
-                {isEditingKey ? 'LƯU' : 'CHỈNH SỬA'}
-              </button>
-            </div>
-
+            {/* Fix: Removed API Key UI as per guidelines - API Key is handled via process.env.API_KEY */}
             <div className="flex items-center bg-blue-900/50 rounded-full p-1 border border-blue-700">
               <button 
                 onClick={() => setModelMode(ModelMode.FLASH)}
@@ -244,6 +190,7 @@ const App: React.FC = () => {
           <div className="flex overflow-x-auto gap-4 no-scrollbar">
             {[
               { id: 'list', label: 'Danh sách học sinh', icon: 'M4 6h16M4 10h16M4 14h16M4 18h16' },
+              { id: 'attendance', label: 'Điểm danh', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' },
               { id: 'add', label: 'Thêm học sinh', icon: 'M12 4v16m8-8H4' },
               { id: 'update', label: 'Cập nhật thông tin', icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z' },
               { id: 'stats', label: 'Thống kê', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
@@ -354,6 +301,10 @@ const App: React.FC = () => {
               </table>
             </div>
           </div>
+        )}
+
+        {activeTab === 'attendance' && (
+          <Attendance students={students} onRefresh={loadData} />
         )}
 
         {activeTab === 'add' && (
