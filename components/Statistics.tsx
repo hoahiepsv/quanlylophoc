@@ -238,7 +238,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
               <tr style="background:#f8fafc;">
                 <th style="border:1px solid #000; padding:10px; width:40px; text-align:center;">STT</th>
                 <th style="border:1px solid #000; padding:10px;">Họ tên học sinh</th>
-                <th style="border:1px solid #000; padding:10px; width:55px; text-align:center;">Lớp</th>
+                <th style="border:1px solid #000; padding:10px; width:55px; text-align:center;">Nhóm</th>
                 <th style="border:1px solid #000; padding:10px; width:85px; text-align:center;">Bắt đầu</th>
                 <th style="border:1px solid #000; padding:10px; width:65px; text-align:center;">Số buổi</th>
                 <th style="border:1px solid #000; padding:10px; width:100px; text-align:center;">SĐT</th>
@@ -313,7 +313,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
         <div style="display:flex; justify-content:space-between; margin-bottom:20px; border-top: 3px solid #2563eb; border-bottom: 3px solid #2563eb; padding: 15px 0;">
           <div style="width: 60%;">
             <p style="margin:5px 0; font-size:14pt;"><strong>Họ và tên:</strong> <span style="font-size:18pt; color:#1e3a8a; font-weight:bold;">${selectedStudent['HỌ TÊN HS']}</span></p>
-            <p style="margin:5px 0; font-size:13pt;"><strong>Lớp đào tạo:</strong> ${selectedStudent['TÊN LỚP']} (Khối ${selectedStudent['KHỐI']})</p>
+            <p style="margin:5px 0; font-size:13pt;"><strong>Lớp đào tạo:</strong> ${selectedStudent['TÊN LỚP']} (Nhóm ${selectedStudent['KHỐI']})</p>
           </div>
           <div style="width: 40%; text-align:right;">
             <p style="margin:5px 0; font-size:13pt;"><strong>Ngày tham gia:</strong> ${formatDateVN(selectedStudent['NGÀY BẮT ĐẦU'])}</p>
@@ -422,7 +422,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
         <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
           <h2 className="text-xl font-black text-blue-900 uppercase flex items-center gap-3">
             <span className="w-2 h-8 bg-blue-600 rounded-full"></span>
-            Thống kê lớp (T{currentMonth}/{currentYear})
+            Thống kê nhóm (T{currentMonth}/{currentYear})
           </h2>
           <button 
             onClick={exportClassReport}
@@ -434,13 +434,13 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
                 <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
                 ĐANG XỬ LÝ HD...
               </>
-            ) : "XUẤT BÁO CÁO LỚP (PDF HD)"}
+            ) : "XUẤT BÁO CÁO NHÓM (PDF HD)"}
           </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100">
-            <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Sĩ số lớp</p>
+            <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Sĩ số nhóm</p>
             <p className="text-3xl font-black text-blue-900">{students.length}</p>
           </div>
           <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-100">
@@ -499,7 +499,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
             >
               <option value="">-- Chọn học sinh để xem dữ liệu chi tiết --</option>
               {students.map((s, idx) => (
-                <option key={idx} value={s['HỌ TÊN HS']}>{s['HỌ TÊN HS']} (Khối {s['KHỐI']})</option>
+                <option key={idx} value={s['HỌ TÊN HS']}>{s['HỌ TÊN HS']} (Nhóm {s['KHỐI']})</option>
               ))}
             </select>
           </div>

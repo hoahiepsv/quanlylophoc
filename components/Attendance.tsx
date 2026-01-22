@@ -45,7 +45,6 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
 
     setSaving(true);
     try {
-      // Fix: Explicitly type rowIndex to fix 'unknown' type error on line 56
       const updatePromises = Array.from(selectedIds).map((rowIndex: number) => {
         const student = students.find(s => s.rowIndex === rowIndex);
         if (!student) return Promise.resolve();
@@ -111,9 +110,9 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
             onChange={(e) => setFilterKhoi(e.target.value)}
             className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-gray-700"
           >
-            <option value="">Tất cả các khối</option>
+            <option value="">Tất cả các nhóm</option>
             {[...Array(12)].map((_, i) => (
-              <option key={i+1} value={i+1}>Khối {i+1}</option>
+              <option key={i+1} value={i+1}>Nhóm {i+1}</option>
             ))}
           </select>
         </div>
@@ -137,7 +136,7 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
               >
                 <div className="flex justify-between items-start mb-2">
                   <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg uppercase ${isSelected ? 'bg-red-200 text-red-800' : 'bg-blue-100 text-blue-800'}`}>
-                    Lớp {student['KHỐI']}
+                    Nhóm {student['KHỐI']}
                   </span>
                   {isSelected && (
                     <div className="bg-red-600 text-white rounded-full p-1 shadow-sm">

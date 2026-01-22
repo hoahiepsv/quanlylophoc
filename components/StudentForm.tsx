@@ -10,7 +10,6 @@ interface StudentFormProps {
 }
 
 const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title, teacherSchedules = [] }) => {
-  // Fix typo in formData initialization: changed 'SỐ ĐIỆY THOẠI 2' to 'SỐ ĐIỆN THOẠI 2'
   const [formData, setFormData] = useState<Partial<Student>>({
     'HỌ TÊN HS': '',
     'KHỐI': '',
@@ -26,7 +25,6 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
   useEffect(() => {
     if (initialData) {
       const sanitized = { ...initialData };
-      // Quan trọng: Làm sạch ngày bắt đầu để không mang theo phần "T17:00..." từ Datasheet
       if (sanitized['NGÀY BẮT ĐẦU']) {
         sanitized['NGÀY BẮT ĐẦU'] = sanitized['NGÀY BẮT ĐẦU'].split(/[T ]/)[0];
       }
@@ -66,7 +64,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
     const startDate = formData['NGÀY BẮT ĐẦU'];
 
     if (!selectedKhoi) {
-      alert("Vui lòng chọn KHỐI trước khi chèn lịch dạy!");
+      alert("Vui lòng chọn NHÓM trước khi chèn lịch dạy!");
       return;
     }
 
@@ -78,7 +76,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
     const teacherSched = teacherSchedules.find(s => String(s['KHỐI']) === String(selectedKhoi));
     
     if (!teacherSched) {
-      alert(`Không tìm thấy lịch dạy cho Khối ${selectedKhoi} trong hệ thống!`);
+      alert(`Không tìm thấy lịch dạy cho Nhóm ${selectedKhoi} trong hệ thống!`);
       return;
     }
 
@@ -86,7 +84,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
     const validDates = teacherDates.filter(d => d >= startDate);
 
     if (validDates.length === 0) {
-      alert("Lịch dạy của giáo viên khối này không có ngày nào sau ngày bắt đầu của học sinh!");
+      alert("Lịch dạy của giáo viên nhóm này không có ngày nào sau ngày bắt đầu của học sinh!");
       return;
     }
 
@@ -94,7 +92,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
     const combined = Array.from(new Set([...currentSchedule, ...validDates])).sort();
 
     setFormData(prev => ({ ...prev, 'LỊCH HỌC': combined.join(' ') }));
-    alert(`Đã tự động thêm ${validDates.length} buổi học dựa trên lịch dạy Khối ${selectedKhoi}!`);
+    alert(`Đã tự động thêm ${validDates.length} buổi học dựa trên lịch dạy Nhóm ${selectedKhoi}!`);
   };
 
   const daysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
@@ -180,16 +178,16 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
               </div>
               <div className="grid grid-cols-2 gap-3">
                  <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1.5">KHỐI</label>
+                  <label className="block text-xs font-bold text-gray-700 mb-1.5">NHÓM</label>
                   <select 
                     name="KHỐI" 
                     value={formData['KHỐI']} 
                     onChange={handleChange}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
                   >
-                    <option value="">Chọn khối</option>
+                    <option value="">Chọn nhóm</option>
                     {[...Array(12)].map((_, i) => (
-                      <option key={i+1} value={i+1}>Lớp {i+1}</option>
+                      <option key={i+1} value={i+1}>Nhóm {i+1}</option>
                     ))}
                   </select>
                 </div>

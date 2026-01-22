@@ -49,7 +49,7 @@ const TeacherScheduleComponent: React.FC = () => {
 
   const handleSave = async () => {
     if (!selectedKhoi) {
-      alert("Vui lòng chọn khối trước!");
+      alert("Vui lòng chọn nhóm trước!");
       return;
     }
     setLoading(true);
@@ -109,22 +109,22 @@ const TeacherScheduleComponent: React.FC = () => {
       <div className="bg-white p-8 rounded-2xl shadow-xl border border-blue-50">
         <h2 className="text-xl font-black text-blue-900 uppercase mb-8 flex items-center gap-3">
           <span className="w-2 h-8 bg-blue-600 rounded-full"></span>
-          Lịch dạy của giáo viên
+          Lịch dạy của giáo viên theo Nhóm
         </h2>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Cài đặt */}
           <div className="space-y-6">
             <div>
-              <label className="block text-xs font-black text-gray-500 uppercase mb-2 tracking-widest">Chọn Khối đang dạy</label>
+              <label className="block text-xs font-black text-gray-500 uppercase mb-2 tracking-widest">Chọn Nhóm đang dạy</label>
               <select 
                 value={selectedKhoi}
                 onChange={(e) => setSelectedKhoi(e.target.value)}
                 className="w-full p-4 border border-gray-200 rounded-xl font-bold text-gray-700 bg-slate-50 outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
               >
-                <option value="">-- Chọn Khối --</option>
+                <option value="">-- Chọn Nhóm --</option>
                 {[...Array(12)].map((_, i) => (
-                  <option key={i+1} value={i+1}>Khối {i+1}</option>
+                  <option key={i+1} value={i+1}>Nhóm {i+1}</option>
                 ))}
               </select>
             </div>
@@ -132,7 +132,7 @@ const TeacherScheduleComponent: React.FC = () => {
             <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100">
               <p className="text-xs font-bold text-blue-800 mb-2">Tóm tắt:</p>
               <p className="text-sm text-blue-600">
-                {selectedKhoi ? `Khối ${selectedKhoi}: ` : 'Vui lòng chọn khối. '}
+                {selectedKhoi ? `Nhóm ${selectedKhoi}: ` : 'Vui lòng chọn nhóm. '}
                 <span className="font-black">{currentDates.length} ngày dạy</span> được tích chọn trong lịch.
               </p>
             </div>
