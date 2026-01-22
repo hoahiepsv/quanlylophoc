@@ -12,6 +12,7 @@ const App: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState({ username: '', password: '' });
   const [modelMode, setModelMode] = useState<ModelMode>(ModelMode.FLASH);
+  const [hasApiKey, setHasApiKey] = useState(false);
 
   // Data State
   const [students, setStudents] = useState<Student[]>([]);
@@ -21,7 +22,38 @@ const App: React.FC = () => {
   const [tempSelection, setTempSelection] = useState<string>('');
   const [selectedForEdit, setSelectedForEdit] = useState<Student | null>(null);
 
-  // Helper: Chuyển đổi định dạng ngày sang dd/mm/yyyy và xoá phần giờ
+  // Filter State for List Tab
+  const [listFilterGrade, setListFilterGrade] = useState<string>('');
+
+  // Check API Key status
+  const checkApiKey = useCallback(async () => {
+    try {
+      if (typeof window.aistudio !== 'undefined' && window.aistudio.hasSelectedApiKey) {
+        const hasKey = await window.aistudio.hasSelectedApiKey();
+        setHasApiKey(hasKey);
+      }
+    } catch (e) {
+      console.error("Lỗi kiểm tra API Key:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkApiKey();
+  }, [checkApiKey]);
+
+  const handleManageKey = async () => {
+    try {
+      if (typeof window.aistudio !== 'undefined' && window.aistudio.openSelectKey) {
+        await window.aistudio.openSelectKey();
+        setHasApiKey(true);
+      } else {
+        alert("Trình quản lý API Key không khả dụng trong môi trường này.");
+      }
+    } catch (e) {
+      console.error("Lỗi mở trình chọn Key:", e);
+    }
+  };
+
   const formatDateVN = (dateStr: string) => {
     if (!dateStr) return '';
     const clean = dateStr.split(/[T ]/)[0];
@@ -32,7 +64,6 @@ const App: React.FC = () => {
     return clean;
   };
 
-  // Fetch real data from Datasheets
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -97,7 +128,7 @@ const App: React.FC = () => {
     }
   };
 
-  // Safe sorting
+  // Memoized lists and stats
   const sortedStudents = useMemo(() => {
     if (!Array.isArray(students)) return [];
     return [...students].sort((a, b) => {
@@ -105,6 +136,20 @@ const App: React.FC = () => {
       const kB = parseInt(String(b['KHỐI'] || '0'));
       return kA - kB;
     });
+  }, [students]);
+
+  const filteredStudents = useMemo(() => {
+    if (!listFilterGrade) return sortedStudents;
+    return sortedStudents.filter(s => String(s['KHỐI']) === listFilterGrade);
+  }, [sortedStudents, listFilterGrade]);
+
+  const gradeCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    students.forEach(s => {
+      const k = String(s['KHỐI']);
+      counts[k] = (counts[k] || 0) + 1;
+    });
+    return counts;
   }, [students]);
 
   if (!isLoggedIn) {
@@ -156,19 +201,46 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       <header className="bg-blue-800 text-white shadow-lg sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div className="container mx-auto px-4 py-4 flex flex-col lg:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-inner">
                <span className="text-blue-800 font-black text-xl">HA</span>
             </div>
             <div>
               <h1 className="text-xl font-bold tracking-tight uppercase">QUẢN LÝ LỚP HỌC</h1>
-              <p className="text-[10px] opacity-75">Đồng bộ Datasheet Realtime v1.5</p>
+              <p className="text-[10px] opacity-75">Đồng bộ Datasheet Realtime v1.6</p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-4">
-            {/* Fix: Removed API Key UI as per guidelines - API Key is handled via process.env.API_KEY */}
+          <div className="flex flex-wrap items-center justify-center gap-4">
+            <div className="flex items-center gap-2 bg-blue-900/60 p-2 rounded-2xl border border-blue-700/50 shadow-inner">
+               <div className="flex flex-col items-end mr-1">
+                 <span className="text-[9px] font-black uppercase text-blue-300 tracking-widest">AI Config</span>
+                 <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noreferrer" className="text-[8px] text-blue-400 underline hover:text-white transition-colors">Billing Docs</a>
+               </div>
+               {hasApiKey ? (
+                 <div className="flex items-center gap-2">
+                    <div className="hidden sm:flex flex-col items-start px-3 py-1 bg-emerald-900/40 rounded-xl border border-emerald-500/30">
+                      <span className="text-[8px] text-emerald-400 font-black uppercase">Mã Khóa</span>
+                      <span className="text-[10px] text-white font-bold">ĐÃ LƯU ✅</span>
+                    </div>
+                    <button 
+                      onClick={handleManageKey}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black px-4 py-2 rounded-xl transition-all shadow-lg active:scale-95 uppercase"
+                    >
+                      CHỈNH SỬA
+                    </button>
+                 </div>
+               ) : (
+                 <button 
+                    onClick={handleManageKey}
+                    className="bg-orange-600 hover:bg-orange-500 text-white text-[10px] font-black px-5 py-2 rounded-xl transition-all shadow-lg animate-pulse hover:animate-none uppercase border-b-4 border-orange-800 active:border-b-0 active:translate-y-1"
+                  >
+                    LƯU API KEY
+                  </button>
+               )}
+            </div>
+
             <div className="flex items-center bg-blue-900/50 rounded-full p-1 border border-blue-700">
               <button 
                 onClick={() => setModelMode(ModelMode.FLASH)}
@@ -233,18 +305,56 @@ const App: React.FC = () => {
 
         {activeTab === 'list' && (
           <div className="bg-white rounded-2xl shadow-xl border border-blue-50 overflow-hidden">
-            <div className="p-6 bg-blue-50 border-b border-blue-100 flex justify-between items-center">
-              <h2 className="text-xl font-black text-blue-900 uppercase">Danh sách học sinh</h2>
-              <div className="text-xs text-blue-600 font-black bg-white px-4 py-2 rounded-xl shadow-sm border border-blue-100 uppercase">
-                Sĩ số: <span className="text-lg">{sortedStudents.length}</span>
+            <div className="p-6 bg-blue-50 border-b border-blue-100 flex flex-col md:flex-row justify-between items-center gap-6">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-xl font-black text-blue-900 uppercase">Danh sách học sinh</h2>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  <button 
+                    onClick={() => setListFilterGrade('')}
+                    className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase transition-all shadow-sm ${listFilterGrade === '' ? 'bg-blue-700 text-white' : 'bg-white text-blue-700 hover:bg-blue-100'}`}
+                  >
+                    Tất cả
+                  </button>
+                  {[...Array(12)].map((_, i) => {
+                    const grade = String(i + 1);
+                    return (
+                      <button 
+                        key={grade}
+                        onClick={() => setListFilterGrade(grade)}
+                        className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase transition-all shadow-sm ${listFilterGrade === grade ? 'bg-blue-700 text-white' : 'bg-white text-blue-700 hover:bg-blue-100'}`}
+                      >
+                        Nhóm {grade}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="flex flex-col items-end">
+                   <div className="text-[9px] text-blue-400 font-black uppercase tracking-wider">Thống kê sĩ số</div>
+                   <div className="flex gap-2 mt-1">
+                      <div className="bg-white border border-blue-200 px-4 py-2 rounded-xl shadow-sm text-center">
+                        <span className="text-[10px] block text-blue-400 font-black uppercase">Tổng</span>
+                        <span className="text-lg font-black text-blue-900 leading-none">{students.length}</span>
+                      </div>
+                      {listFilterGrade && (
+                        <div className="bg-blue-700 px-4 py-2 rounded-xl shadow-lg text-center border-b-2 border-blue-900">
+                          <span className="text-[10px] block text-blue-200 font-black uppercase">Nhóm {listFilterGrade}</span>
+                          <span className="text-lg font-black text-white leading-none">{gradeCounts[listFilterGrade] || 0}</span>
+                        </div>
+                      )}
+                   </div>
+                </div>
               </div>
             </div>
+
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead className="bg-gray-50 text-gray-500 text-[10px] md:text-xs uppercase font-black">
                   <tr>
                     <th className="px-6 py-4">HỌ TÊN HS</th>
-                    <th className="px-6 py-4">KHỐI/LỚP</th>
+                    <th className="px-6 py-4">NHÓM/LỚP</th>
                     <th className="px-6 py-4">SĐT LIÊN HỆ</th>
                     <th className="px-6 py-4">NGÀY BẮT ĐẦU</th>
                     <th className="px-6 py-4">HỌC PHÍ</th>
@@ -252,11 +362,11 @@ const App: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-sm">
-                  {sortedStudents.map((student, idx) => (
+                  {filteredStudents.map((student, idx) => (
                     <tr key={idx} className="hover:bg-blue-50/40 transition-colors group">
                       <td className="px-6 py-5 font-bold text-gray-800 group-hover:text-blue-700 transition-colors">{student['HỌ TÊN HS']}</td>
                       <td className="px-6 py-5">
-                        <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-lg text-[10px] font-black mr-2 uppercase">Lớp {student['KHỐI']}</span>
+                        <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-lg text-[10px] font-black mr-2 uppercase">Nhóm {student['KHỐI']}</span>
                         <span className="font-medium text-gray-600">{student['TÊN LỚP']}</span>
                       </td>
                       <td className="px-6 py-5">
@@ -285,14 +395,14 @@ const App: React.FC = () => {
                       </td>
                     </tr>
                   ))}
-                  {sortedStudents.length === 0 && !loading && (
+                  {filteredStudents.length === 0 && !loading && (
                     <tr>
                       <td colSpan={6} className="px-6 py-32 text-center">
                         <div className="flex flex-col items-center opacity-20">
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                           </svg>
-                          <p className="text-xl font-black">CHƯA CÓ HỌC SINH NÀO</p>
+                          <p className="text-xl font-black uppercase">Không có dữ liệu nhóm này</p>
                         </div>
                       </td>
                     </tr>
@@ -339,7 +449,7 @@ const App: React.FC = () => {
                  >
                     <option value="">-- Chọn học sinh cần chỉnh sửa --</option>
                     {sortedStudents.map((s, idx) => (
-                      <option key={idx} value={s['HỌ TÊN HS']}>{s['HỌ TÊN HS']} (Lớp {s['KHỐI']})</option>
+                      <option key={idx} value={s['HỌ TÊN HS']}>{s['HỌ TÊN HS']} (Nhóm {s['KHỐI']})</option>
                     ))}
                  </select>
                  <button
