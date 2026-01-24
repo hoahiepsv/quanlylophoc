@@ -12,6 +12,7 @@ const App: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState({ username: '', password: '' });
   const [modelMode, setModelMode] = useState<ModelMode>(ModelMode.FLASH);
+  const [showSettings, setShowSettings] = useState(false);
   
   // API Key State (Manual insertion for cross-browser support)
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('GEMINI_API_KEY') || '');
@@ -39,6 +40,7 @@ const App: React.FC = () => {
   const handleSaveApiKey = () => {
     localStorage.setItem('GEMINI_API_KEY', apiKey);
     alert("Đã lưu API Key vào trình duyệt!");
+    setShowSettings(false);
   };
 
   const formatDateVN = (dateStr: string) => {
@@ -206,45 +208,59 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       <header className="bg-blue-800 text-white shadow-lg sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4 flex flex-col lg:flex-row justify-between items-center gap-4">
+        <div className="container mx-auto px-4 py-3 flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-inner">
-               <span className="text-blue-800 font-black text-xl">HA</span>
+            <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center shadow-inner">
+               <span className="text-blue-800 font-black text-lg">HA</span>
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-tight uppercase">QUẢN LÝ LỚP HỌC</h1>
-              <p className="text-[10px] opacity-75">Đồng bộ Datasheet Realtime v1.6</p>
+              <h1 className="text-lg font-bold tracking-tight uppercase leading-none">QUẢN LÝ LỚP HỌC</h1>
+              <p className="text-[9px] opacity-75 mt-0.5">Realtime Datasheet v1.7</p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-4">
-            {/* API Key Input Section for Cross-Browser Support */}
-            <div className="flex items-center gap-3 bg-blue-900/60 p-2.5 rounded-2xl border border-blue-700/50 shadow-inner">
+          <button 
+            onClick={() => setShowSettings(!showSettings)}
+            className={`p-2.5 rounded-xl transition-all flex items-center gap-2 border ${showSettings ? 'bg-white text-blue-800 border-white' : 'bg-blue-900/50 text-white border-blue-700 hover:bg-blue-700'}`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 transition-transform duration-500 ${showSettings ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">Cấu hình</span>
+          </button>
+        </div>
+
+        {/* Collapsible Settings Area */}
+        <div className={`overflow-hidden transition-all duration-500 ease-in-out bg-blue-900/40 border-t border-blue-700/30 ${showSettings ? 'max-h-40 opacity-100 py-4' : 'max-h-0 opacity-0 py-0'}`}>
+          <div className="container mx-auto px-4 flex flex-wrap items-center justify-center gap-6">
+            <div className="flex items-center gap-3 bg-blue-950/50 p-2.5 rounded-2xl border border-blue-700/50 shadow-inner">
                <input 
                  type="password"
-                 placeholder="Nhập API Key..."
+                 placeholder="Dán API Key vào đây..."
                  value={apiKey}
                  onChange={(e) => setApiKey(e.target.value)}
-                 className="bg-blue-800/50 text-white text-[10px] px-3 py-2 rounded-lg border border-blue-600 outline-none w-44 focus:ring-1 focus:ring-blue-400 font-mono"
+                 className="bg-blue-800/50 text-white text-[11px] px-4 py-2.5 rounded-xl border border-blue-600 outline-none w-64 focus:ring-1 focus:ring-blue-400 font-mono"
                />
                <button 
                   onClick={handleSaveApiKey}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-95 uppercase"
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black px-5 py-3 rounded-xl transition-all shadow-lg active:scale-95 uppercase"
                 >
                   LƯU KEY
                 </button>
             </div>
 
-            <div className="flex items-center bg-blue-900/50 rounded-full p-1 border border-blue-700">
+            <div className="flex items-center bg-blue-950/50 rounded-2xl p-1.5 border border-blue-700 shadow-inner">
+              <span className="text-[9px] font-black uppercase text-blue-300 px-3 tracking-widest">Model:</span>
               <button 
                 onClick={() => setModelMode(ModelMode.FLASH)}
-                className={`px-4 py-1 rounded-full text-[10px] md:text-xs font-semibold transition-all ${modelMode === ModelMode.FLASH ? 'bg-white text-blue-800' : 'text-blue-200 hover:text-white'}`}
+                className={`px-5 py-2 rounded-xl text-[10px] font-bold transition-all ${modelMode === ModelMode.FLASH ? 'bg-white text-blue-800 shadow-md' : 'text-blue-200 hover:text-white'}`}
               >
                 Flash
               </button>
               <button 
                 onClick={() => setModelMode(ModelMode.PRO)}
-                className={`px-4 py-1 rounded-full text-[10px] md:text-xs font-semibold transition-all ${modelMode === ModelMode.PRO ? 'bg-white text-blue-800' : 'text-blue-200 hover:text-white'}`}
+                className={`px-5 py-2 rounded-xl text-[10px] font-bold transition-all ${modelMode === ModelMode.PRO ? 'bg-white text-blue-800 shadow-md' : 'text-blue-200 hover:text-white'}`}
               >
                 Pro
               </button>
@@ -252,7 +268,7 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        <nav className="container mx-auto px-4 mt-2">
+        <nav className="container mx-auto px-4">
           <div className="flex overflow-x-auto gap-4 no-scrollbar">
             {[
               { id: 'list', label: 'Danh sách học sinh', icon: 'M4 6h16M4 10h16M4 14h16M4 18h16' },
@@ -271,13 +287,13 @@ const App: React.FC = () => {
                     setTempSelection('');
                   }
                 }}
-                className={`flex items-center gap-2 px-4 py-3 border-b-4 font-bold text-sm transition-all whitespace-nowrap ${
+                className={`flex items-center gap-2 px-4 py-3 border-b-4 font-bold text-xs transition-all whitespace-nowrap ${
                   activeTab === tab.id 
                   ? 'border-white bg-white/10 text-white' 
                   : 'border-transparent text-blue-200 hover:text-white hover:bg-white/5'
                 }`}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={tab.icon} />
                 </svg>
                 {tab.label}
@@ -365,8 +381,23 @@ const App: React.FC = () => {
                           <span className="font-medium text-gray-600">{student['TÊN LỚP']}</span>
                         </td>
                         <td className="px-6 py-5">
-                          <div className="text-xs font-bold text-gray-700">{student['SỐ ĐIỆN THOẠI 1']}</div>
-                          <div className="text-[10px] text-gray-400 font-medium">{student['SỐ ĐIỆN THOẠI 2'] || 'Không có'}</div>
+                          <a 
+                            href={`tel:${student['SỐ ĐIỆN THOẠI 1']}`} 
+                            className="block text-xs font-bold text-blue-700 hover:underline hover:text-blue-800 transition-all"
+                          >
+                            {student['SỐ ĐIỆN THOẠI 1']}
+                          </a>
+                          {student['SỐ ĐIỆN THOẠI 2'] && (
+                            <a 
+                              href={`tel:${student['SỐ ĐIỆN THOẠI 2']}`} 
+                              className="block text-[10px] text-gray-400 font-medium hover:underline hover:text-blue-600 transition-all mt-1"
+                            >
+                              {student['SỐ ĐIỆN THOẠI 2']}
+                            </a>
+                          )}
+                          {!student['SỐ ĐIỆN THOẠI 2'] && (
+                            <div className="text-[10px] text-gray-300 italic mt-1">Không có SĐT 2</div>
+                          )}
                         </td>
                         <td className="px-6 py-5 text-xs font-mono font-bold text-gray-500">{formatDateVN(student['NGÀY BẮT ĐẦU'])}</td>
                         <td className="px-6 py-5">
@@ -504,7 +535,7 @@ const App: React.FC = () => {
              </div>
              <div>
               <span className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] block">Hệ Thống Quản Lý</span>
-              <span className="text-sm text-blue-900 font-black">HOÀ HIỆP AI © 2024</span>
+              <span className="text-sm text-blue-900 font-black">LÊ HOÀ HIỆP © 2024</span>
              </div>
           </div>
           <div className="text-xs md:text-sm font-black text-gray-400 italic">
