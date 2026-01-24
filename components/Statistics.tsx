@@ -270,7 +270,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
       await captureAndAddSection(doc, `
         <div style="margin-top:50px; text-align:right; font-size:12pt;">
            <p style="margin-bottom:80px; font-weight:bold;">NGƯỜI LẬP BÁO CÁO</p>
-           <p style="font-weight:bold; text-transform:uppercase;">HOÀ HIỆP AI</p>
+           <p style="font-weight:bold; text-transform:uppercase;">LÊ HOÀ HIỆP</p>
         </div>
         <div style="margin-top:20px; text-align:center; font-style:italic; font-size:10pt; color:#999; border-top:1px solid #eee; padding-top:15px;">
           Tài liệu nội bộ - Hệ thống quản lý học tập thông minh v2.0 - Hotline: 0983.676.470
@@ -402,7 +402,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
           <div style="text-align:center; width: 45%;">
              <p style="font-weight:bold;">GIÁO VIÊN CHỦ NHIỆM</p>
              <p style="font-size:10pt; font-style:italic;">(Đã phê duyệt điện tử)</p>
-             <p style="margin-top:70px; font-weight:bold; font-size:14pt;">HOÀ HIỆP AI</p>
+             <p style="margin-top:70px; font-weight:bold; font-size:14pt;">LÊ HOÀ HIỆP</p>
           </div>
         </div>
       `, currentY);

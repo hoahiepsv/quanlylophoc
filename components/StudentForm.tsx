@@ -15,7 +15,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
     'KHỐI': '',
     'TÊN LỚP': '',
     'SỐ ĐIỆN THOẠI 1': '',
-    'SỐ ĐIỆN THOẠI 2': '',
+    'SỐ ĐIỆY THOẠI 2': '',
     'NGÀY BẮT ĐẦU': new Date().toISOString().split('T')[0],
     'LỊCH HỌC': '',
     'ĐIỂM DANH HS': '',
@@ -95,6 +95,10 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
     alert(`Đã tự động thêm ${validDates.length} buổi học dựa trên lịch dạy Nhóm ${selectedKhoi}!`);
   };
 
+  const handleClearSchedule = () => {
+    setFormData(prev => ({ ...prev, 'LỊCH HỌC': '' }));
+  };
+
   const daysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
   const firstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
 
@@ -108,6 +112,13 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
     }
     setFormData(prev => ({ ...prev, [field]: newVal.join(' ') }));
   };
+
+  // Tính toán số buổi đã học và đã chọn
+  const scheduleArray = (formData['LỊCH HỌC'] || '').split(' ').filter(d => d);
+  const absenceArray = (formData['ĐIỂM DANH HS'] || '').split(' ').filter(d => d);
+  const todayStr = new Date().toISOString().split('T')[0];
+  const attendedCount = scheduleArray.filter(d => d <= todayStr && !absenceArray.includes(d)).length;
+  const selectedCount = scheduleArray.length;
 
   const renderCalendar = (field: 'LỊCH HỌC' | 'ĐIỂM DANH HS', viewDateObj: Date) => {
     const year = viewDateObj.getFullYear();
@@ -238,18 +249,33 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
               <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest flex flex-col gap-2">
                 <div className="flex justify-between items-center w-full">
                   <span>LỊCH HỌC</span>
-                  <span className="text-blue-600 lowercase font-medium">Đã chọn: {(formData['LỊCH HỌC'] || '').split(' ').filter(d => d).length} buổi</span>
+                  <div className="flex gap-3">
+                    <span className="text-emerald-600 lowercase font-medium">Đã học: {attendedCount} buổi</span>
+                    <span className="text-blue-600 lowercase font-medium">Đã chọn: {selectedCount} buổi</span>
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleInsertTeacherSchedule}
-                  className="w-full py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-sm active:scale-95"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  Tự động chèn lịch dạy
-                </button>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={handleInsertTeacherSchedule}
+                    className="py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-sm active:scale-95"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    Chèn lịch dạy
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleClearSchedule}
+                    className="py-2.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-sm active:scale-95"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Xoá hết lịch học
+                  </button>
+                </div>
               </h3>
               <div className="border border-gray-100 rounded-2xl p-4 bg-slate-50 shadow-inner">
                 <div className="flex justify-between items-center mb-4">
@@ -271,7 +297,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
             <div className="space-y-4">
               <h3 className="text-sm font-bold text-red-500 uppercase tracking-widest flex justify-between items-center">
                 <span>ĐIỂM DANH (VẮNG MẶT)</span>
-                <span className="text-red-600 lowercase font-medium">Đã vắng: {(formData['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).length} buổi</span>
+                <span className="text-red-600 lowercase font-medium">Đã vắng: {absenceArray.length} buổi</span>
               </h3>
               <p className="text-[10px] text-gray-400 italic mt-1">Ghi chú: Vui lòng click vào các ngày học sinh vắng học để hệ thống lưu lại.</p>
               <div className="border border-red-50 rounded-2xl p-4 bg-red-50/30 shadow-inner">
