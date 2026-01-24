@@ -12,7 +12,9 @@ const App: React.FC = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState({ username: '', password: '' });
   const [modelMode, setModelMode] = useState<ModelMode>(ModelMode.FLASH);
-  const [hasApiKey, setHasApiKey] = useState(false);
+  
+  // API Key State (Manual insertion for cross-browser support)
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('GEMINI_API_KEY') || '');
 
   // Data State
   const [students, setStudents] = useState<Student[]>([]);
@@ -25,33 +27,18 @@ const App: React.FC = () => {
   // Filter State for List Tab
   const [listFilterGrade, setListFilterGrade] = useState<string>('');
 
-  // Check API Key status
-  const checkApiKey = useCallback(async () => {
-    try {
-      if (typeof window.aistudio !== 'undefined' && window.aistudio.hasSelectedApiKey) {
-        const hasKey = await window.aistudio.hasSelectedApiKey();
-        setHasApiKey(hasKey);
-      }
-    } catch (e) {
-      console.error("Lỗi kiểm tra API Key:", e);
-    }
-  }, []);
-
+  // Sync API Key to global process.env for Gemini SDK
   useEffect(() => {
-    checkApiKey();
-  }, [checkApiKey]);
-
-  const handleManageKey = async () => {
-    try {
-      if (typeof window.aistudio !== 'undefined' && window.aistudio.openSelectKey) {
-        await window.aistudio.openSelectKey();
-        setHasApiKey(true);
-      } else {
-        alert("Trình quản lý API Key không khả dụng trong môi trường này.");
-      }
-    } catch (e) {
-      console.error("Lỗi mở trình chọn Key:", e);
+    const win = window as any;
+    if (!win.process) win.process = { env: {} };
+    if (apiKey) {
+      win.process.env.API_KEY = apiKey;
     }
+  }, [apiKey]);
+
+  const handleSaveApiKey = () => {
+    localStorage.setItem('GEMINI_API_KEY', apiKey);
+    alert("Đã lưu API Key vào trình duyệt!");
   };
 
   const formatDateVN = (dateStr: string) => {
@@ -62,6 +49,17 @@ const App: React.FC = () => {
       return `${parts[2]}/${parts[1]}/${parts[0]}`;
     }
     return clean;
+  };
+
+  const calculateStudentStats = (student: Student) => {
+    const schedule = (student['LỊCH HỌC'] || '').split(' ').filter(d => d);
+    const absences = (student['ĐIỂM DANH HS'] || '').split(' ').filter(d => d);
+    const nowStr = new Date().toISOString().split('T')[0];
+    
+    const attended = schedule.filter(d => d <= nowStr && !absences.includes(d)).length;
+    const vắng = absences.length;
+    
+    return { attended, vắng };
   };
 
   const loadData = useCallback(async () => {
@@ -147,10 +145,17 @@ const App: React.FC = () => {
     const counts: Record<string, number> = {};
     students.forEach(s => {
       const k = String(s['KHỐI']);
-      counts[k] = (counts[k] || 0) + 1;
+      if (k && k !== 'undefined' && k !== 'null') {
+        counts[k] = (counts[k] || 0) + 1;
+      }
     });
     return counts;
   }, [students]);
+
+  // Lấy danh sách các nhóm thực tế có học sinh
+  const activeGrades = useMemo(() => {
+    return Object.keys(gradeCounts).sort((a, b) => parseInt(a) - parseInt(b));
+  }, [gradeCounts]);
 
   if (!isLoggedIn) {
     return (
@@ -213,32 +218,21 @@ const App: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-4">
-            <div className="flex items-center gap-2 bg-blue-900/60 p-2 rounded-2xl border border-blue-700/50 shadow-inner">
-               <div className="flex flex-col items-end mr-1">
-                 <span className="text-[9px] font-black uppercase text-blue-300 tracking-widest">AI Config</span>
-                 <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noreferrer" className="text-[8px] text-blue-400 underline hover:text-white transition-colors">Billing Docs</a>
-               </div>
-               {hasApiKey ? (
-                 <div className="flex items-center gap-2">
-                    <div className="hidden sm:flex flex-col items-start px-3 py-1 bg-emerald-900/40 rounded-xl border border-emerald-500/30">
-                      <span className="text-[8px] text-emerald-400 font-black uppercase">Mã Khóa</span>
-                      <span className="text-[10px] text-white font-bold">ĐÃ LƯU ✅</span>
-                    </div>
-                    <button 
-                      onClick={handleManageKey}
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black px-4 py-2 rounded-xl transition-all shadow-lg active:scale-95 uppercase"
-                    >
-                      CHỈNH SỬA
-                    </button>
-                 </div>
-               ) : (
-                 <button 
-                    onClick={handleManageKey}
-                    className="bg-orange-600 hover:bg-orange-500 text-white text-[10px] font-black px-5 py-2 rounded-xl transition-all shadow-lg animate-pulse hover:animate-none uppercase border-b-4 border-orange-800 active:border-b-0 active:translate-y-1"
-                  >
-                    LƯU API KEY
-                  </button>
-               )}
+            {/* API Key Input Section for Cross-Browser Support */}
+            <div className="flex items-center gap-3 bg-blue-900/60 p-2.5 rounded-2xl border border-blue-700/50 shadow-inner">
+               <input 
+                 type="password"
+                 placeholder="Nhập API Key..."
+                 value={apiKey}
+                 onChange={(e) => setApiKey(e.target.value)}
+                 className="bg-blue-800/50 text-white text-[10px] px-3 py-2 rounded-lg border border-blue-600 outline-none w-44 focus:ring-1 focus:ring-blue-400 font-mono"
+               />
+               <button 
+                  onClick={handleSaveApiKey}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black px-4 py-2.5 rounded-xl transition-all shadow-lg active:scale-95 uppercase"
+                >
+                  LƯU KEY
+                </button>
             </div>
 
             <div className="flex items-center bg-blue-900/50 rounded-full p-1 border border-blue-700">
@@ -315,18 +309,15 @@ const App: React.FC = () => {
                   >
                     Tất cả
                   </button>
-                  {[...Array(12)].map((_, i) => {
-                    const grade = String(i + 1);
-                    return (
-                      <button 
-                        key={grade}
-                        onClick={() => setListFilterGrade(grade)}
-                        className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase transition-all shadow-sm ${listFilterGrade === grade ? 'bg-blue-700 text-white' : 'bg-white text-blue-700 hover:bg-blue-100'}`}
-                      >
-                        Nhóm {grade}
-                      </button>
-                    );
-                  })}
+                  {activeGrades.map((grade) => (
+                    <button 
+                      key={grade}
+                      onClick={() => setListFilterGrade(grade)}
+                      className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase transition-all shadow-sm ${listFilterGrade === grade ? 'bg-blue-700 text-white' : 'bg-white text-blue-700 hover:bg-blue-100'}`}
+                    >
+                      Nhóm {grade}
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -357,47 +348,58 @@ const App: React.FC = () => {
                     <th className="px-6 py-4">NHÓM/LỚP</th>
                     <th className="px-6 py-4">SĐT LIÊN HỆ</th>
                     <th className="px-6 py-4">NGÀY BẮT ĐẦU</th>
+                    <th className="px-6 py-4">ĐÃ HỌC</th>
+                    <th className="px-6 py-4">VẮNG</th>
                     <th className="px-6 py-4">HỌC PHÍ</th>
                     <th className="px-6 py-4 text-center">HÀNH ĐỘNG</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-sm">
-                  {filteredStudents.map((student, idx) => (
-                    <tr key={idx} className="hover:bg-blue-50/40 transition-colors group">
-                      <td className="px-6 py-5 font-bold text-gray-800 group-hover:text-blue-700 transition-colors">{student['HỌ TÊN HS']}</td>
-                      <td className="px-6 py-5">
-                        <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-lg text-[10px] font-black mr-2 uppercase">Nhóm {student['KHỐI']}</span>
-                        <span className="font-medium text-gray-600">{student['TÊN LỚP']}</span>
-                      </td>
-                      <td className="px-6 py-5">
-                        <div className="text-xs font-bold text-gray-700">{student['SỐ ĐIỆN THOẠI 1']}</div>
-                        <div className="text-[10px] text-gray-400 font-medium">{student['SỐ ĐIỆN THOẠI 2'] || 'Không có'}</div>
-                      </td>
-                      <td className="px-6 py-5 text-xs font-mono font-bold text-gray-500">{formatDateVN(student['NGÀY BẮT ĐẦU'])}</td>
-                      <td className="px-6 py-5">
-                        <div className="flex flex-wrap gap-1">
-                          {(student['ĐÓNG HỌC PHÍ'] || '').split(' ').filter(f => f).map(f => (
-                            <span key={f} className="text-[9px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200 font-black uppercase tracking-tighter">{f}</span>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="px-6 py-5 text-center">
-                        <button 
-                          onClick={() => { 
-                            setTempSelection(student['HỌ TÊN HS']);
-                            setSelectedForEdit(student); 
-                            setActiveTab('update'); 
-                          }}
-                          className="bg-blue-600 text-white hover:bg-blue-700 px-5 py-2 rounded-xl text-xs font-black transition-all shadow-md active:scale-95"
-                        >
-                          SỬA
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredStudents.map((student, idx) => {
+                    const stats = calculateStudentStats(student);
+                    return (
+                      <tr key={idx} className="hover:bg-blue-50/40 transition-colors group">
+                        <td className="px-6 py-5 font-bold text-gray-800 group-hover:text-blue-700 transition-colors">{student['HỌ TÊN HS']}</td>
+                        <td className="px-6 py-5">
+                          <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-lg text-[10px] font-black mr-2 uppercase">Nhóm {student['KHỐI']}</span>
+                          <span className="font-medium text-gray-600">{student['TÊN LỚP']}</span>
+                        </td>
+                        <td className="px-6 py-5">
+                          <div className="text-xs font-bold text-gray-700">{student['SỐ ĐIỆN THOẠI 1']}</div>
+                          <div className="text-[10px] text-gray-400 font-medium">{student['SỐ ĐIỆN THOẠI 2'] || 'Không có'}</div>
+                        </td>
+                        <td className="px-6 py-5 text-xs font-mono font-bold text-gray-500">{formatDateVN(student['NGÀY BẮT ĐẦU'])}</td>
+                        <td className="px-6 py-5">
+                          <span className="text-emerald-600 font-black text-xs">{stats.attended} buổi</span>
+                        </td>
+                        <td className="px-6 py-5">
+                          <span className="text-red-500 font-black text-xs">{stats.vắng} buổi</span>
+                        </td>
+                        <td className="px-6 py-5">
+                          <div className="flex flex-wrap gap-1">
+                            {(student['ĐÓNG HỌC PHÍ'] || '').split(' ').filter(f => f).map(f => (
+                              <span key={f} className="text-[9px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200 font-black uppercase tracking-tighter">{f}</span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="px-6 py-5 text-center">
+                          <button 
+                            onClick={() => { 
+                              setTempSelection(student['HỌ TÊN HS']);
+                              setSelectedForEdit(student); 
+                              setActiveTab('update'); 
+                            }}
+                            className="bg-blue-600 text-white hover:bg-blue-700 px-5 py-2 rounded-xl text-xs font-black transition-all shadow-md active:scale-95"
+                          >
+                            SỬA
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {filteredStudents.length === 0 && !loading && (
                     <tr>
-                      <td colSpan={6} className="px-6 py-32 text-center">
+                      <td colSpan={8} className="px-6 py-32 text-center">
                         <div className="flex flex-col items-center opacity-20">
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
@@ -449,7 +451,9 @@ const App: React.FC = () => {
                  >
                     <option value="">-- Chọn học sinh cần chỉnh sửa --</option>
                     {sortedStudents.map((s, idx) => (
-                      <option key={idx} value={s['HỌ TÊN HS']}>{s['HỌ TÊN HS']} (Nhóm {s['KHỐI']})</option>
+                      <option key={idx} value={s['HỌ TÊN HS']}>
+                        {s['HỌ TÊN HS']} (Nhóm {s['KHỐI']} - Lớp {s['TÊN LỚP']})
+                      </option>
                     ))}
                  </select>
                  <button
