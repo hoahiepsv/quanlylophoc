@@ -457,28 +457,57 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
           </div>
         </div>
 
-        <div className="mt-8 space-y-6">
+        <div className="mt-8 space-y-8">
+          {/* Danh sách học sinh ĐÃ ĐÓNG */}
           <div>
-            <h3 className="text-xs font-black text-red-500 uppercase mb-3 tracking-tighter">Học sinh chuẩn bị đóng phí tháng này</h3>
+            <h3 className="text-[11px] font-black text-emerald-600 uppercase mb-3 tracking-wider flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+              Học sinh đã hoàn thành học phí tháng này
+            </h3>
             <div className="flex flex-wrap gap-2">
-              {classStats.unpaidThisMonth.map((s, i) => (
-                <span key={i} className="bg-red-50 text-red-700 px-3 py-1.5 rounded-lg text-xs font-bold border border-red-100">
-                  {s['HỌ TÊN HS']}
+              {classStats.paidThisMonth.map((s, i) => (
+                <span key={i} className="bg-emerald-50 text-emerald-700 px-3 py-2 rounded-xl text-[11px] font-bold border border-emerald-100 shadow-sm">
+                  {s['HỌ TÊN HS']} - <span className="opacity-60">{s['TÊN LỚP']}</span>
                 </span>
               ))}
-              {classStats.unpaidThisMonth.length === 0 && <span className="text-emerald-600 font-bold text-xs">Đã đóng đủ! ✅</span>}
+              {classStats.paidThisMonth.length === 0 && <span className="text-gray-400 font-bold text-xs italic">Chưa có ai hoàn thành học phí tháng này.</span>}
             </div>
           </div>
+
+          {/* Danh sách học sinh CHUẨN BỊ ĐÓNG */}
           <div>
-            <h3 className="text-xs font-black text-orange-500 uppercase mb-3 tracking-tighter">Học sinh nợ phí các tháng trước</h3>
+            <h3 className="text-[11px] font-black text-red-500 uppercase mb-3 tracking-wider flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+              Học sinh chuẩn bị đóng phí tháng này
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {classStats.unpaidThisMonth.map((s, i) => (
+                <span key={i} className="bg-red-50 text-red-700 px-3 py-2 rounded-xl text-[11px] font-bold border border-red-100 shadow-sm">
+                  {s['HỌ TÊN HS']} - <span className="opacity-60">{s['TÊN LỚP']}</span>
+                </span>
+              ))}
+              {classStats.unpaidThisMonth.length === 0 && <span className="text-emerald-600 font-bold text-xs">Tất cả đã hoàn thành! ✅</span>}
+            </div>
+          </div>
+
+          {/* Danh sách học sinh NỢ PHÍ CŨ */}
+          <div>
+            <h3 className="text-[11px] font-black text-orange-500 uppercase mb-3 tracking-wider flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
+              Học sinh nợ phí các tháng trước
+            </h3>
             <div className="flex flex-wrap gap-3">
               {classStats.debtors.map((d, i) => (
-                <div key={i} className="bg-white border border-orange-200 px-4 py-2 rounded-xl shadow-sm flex items-center gap-3">
-                  <span className="text-sm font-bold text-gray-800">{d.student['HỌ TÊN HS']}</span>
-                  <span className="text-[10px] font-black bg-orange-100 text-orange-700 px-2 py-0.5 rounded-lg uppercase">Nợ: {d.unpaidMonths.join(', ')}</span>
+                <div key={i} className="bg-white border border-orange-200 px-4 py-2.5 rounded-2xl shadow-sm flex items-center gap-3">
+                  <span className="text-xs font-bold text-gray-800">
+                    {d.student['HỌ TÊN HS']} - <span className="text-gray-400 font-medium">{d.student['TÊN LỚP']}</span>
+                  </span>
+                  <span className="text-[10px] font-black bg-orange-100 text-orange-700 px-2.5 py-1 rounded-lg uppercase border border-orange-200">
+                    Nợ: {d.unpaidMonths.join(', ')}
+                  </span>
                 </div>
               ))}
-              {classStats.debtors.length === 0 && <span className="text-emerald-600 font-bold text-xs">Không có nợ cũ. ✨</span>}
+              {classStats.debtors.length === 0 && <span className="text-emerald-600 font-bold text-xs">Tuyệt vời! Không có nợ cũ. ✨</span>}
             </div>
           </div>
         </div>
