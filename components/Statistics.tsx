@@ -131,43 +131,33 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
     container.style.lineHeight = '1.6';
     container.style.color = '#000';
     container.style.backgroundColor = '#fff';
-    container.style.position = 'absolute';
-    container.style.top = '0';
-    container.style.left = '0';
-    container.style.opacity = '0';
-    container.style.zIndex = '-1';
-    container.style.pointerEvents = 'none';
+    container.style.position = 'fixed';
+    container.style.left = '-9999px';
     container.innerHTML = html;
     document.body.appendChild(container);
 
-    // Chờ trình duyệt render layout
-    await new Promise(resolve => setTimeout(resolve, 100));
+    const canvas = await html2canvas(container, { 
+      scale: 4, 
+      useCORS: true, 
+      backgroundColor: '#ffffff',
+      logging: false,
+      windowWidth: 1000
+    });
+    
+    const imgData = canvas.toDataURL('image/jpeg', 1.0);
+    const pdfWidth = doc.internal.pageSize.getWidth();
+    const margin = 15;
+    const imgWidth = pdfWidth - (margin * 2);
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-    try {
-      const canvas = await html2canvas(container, { 
-        scale: 2.5, // Giảm từ 4 xuống 2.5 để tăng tương thích và hiệu suất
-        useCORS: true, 
-        backgroundColor: '#ffffff',
-        logging: false,
-        windowWidth: 1000
-      });
-      
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
-      const pdfWidth = doc.internal.pageSize.getWidth();
-      const margin = 15;
-      const imgWidth = pdfWidth - (margin * 2);
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-      if (yOffset + imgHeight > doc.internal.pageSize.getHeight() - margin) {
-        doc.addPage();
-        yOffset = margin;
-      }
-
-      doc.addImage(imgData, 'JPEG', margin, yOffset, imgWidth, imgHeight, undefined, 'FAST');
-      return yOffset + imgHeight;
-    } finally {
-      document.body.removeChild(container);
+    if (yOffset + imgHeight > doc.internal.pageSize.getHeight() - margin) {
+      doc.addPage();
+      yOffset = margin;
     }
+
+    doc.addImage(imgData, 'JPEG', margin, yOffset, imgWidth, imgHeight, undefined, 'FAST');
+    document.body.removeChild(container);
+    return yOffset + imgHeight;
   };
 
   const exportClassReport = async () => {
@@ -293,8 +283,8 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
 
       doc.save(`Bao_Cao_Lop_T${currentMonth}_HD.pdf`);
     } catch (err) {
-      console.error("PDF Export Error:", err);
-      alert("Đã xảy ra lỗi khi tạo PDF. Vui lòng thử lại trên trình duyệt Chrome để có kết quả tốt nhất.");
+      console.error(err);
+      alert("Lỗi khi xuất PDF sắc nét cao.");
     } finally {
       setIsExporting(false);
     }
@@ -320,6 +310,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
 
       let currentY = 15;
 
+      // Tính toán thông tin cho bảng chi tiết
       const detailedAbsences = studentDetailStats.absenceDates.map(d => formatDateVN(d)).join(', ') || 'Không vắng';
       const detailedPaidMonths = studentDetailStats.paidMonths.join(', ') || 'Chưa đóng';
       const periodStr = `Từ ${formatDateVN(selectedStudent['NGÀY BẮT ĐẦU'])} đến ${today.toLocaleDateString('vi-VN')}`;
@@ -384,11 +375,8 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
         chartCaptureContainer.style.padding = '30px 50px';
         chartCaptureContainer.style.backgroundColor = '#ffffff';
         chartCaptureContainer.style.fontFamily = '"Times New Roman", Times, serif';
-        chartCaptureContainer.style.position = 'absolute';
-        chartCaptureContainer.style.top = '0';
-        chartCaptureContainer.style.left = '0';
-        chartCaptureContainer.style.opacity = '0';
-        chartCaptureContainer.style.zIndex = '-1';
+        chartCaptureContainer.style.position = 'fixed';
+        chartCaptureContainer.style.left = '-9999px';
         
         chartCaptureContainer.innerHTML = `
           <h3 style="font-size:16pt; font-weight:bold; color:#1e3a8a; margin-bottom:20px; border-left:8px solid #1e3a8a; padding-left:15px; text-transform:uppercase;">BIỂU ĐỒ DIỄN BIẾN CHUYÊN CẦN (12 THÁNG GẦN NHẤT):</h3>
@@ -396,11 +384,8 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
         `;
         document.body.appendChild(chartCaptureContainer);
 
-        // Chờ render
-        await new Promise(resolve => setTimeout(resolve, 100));
-
         const originalChartCanvas = await html2canvas(chartRef.current, { 
-          scale: 2.5, 
+          scale: 4, 
           useCORS: true,
           logging: false 
         });
@@ -413,11 +398,11 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
         target.appendChild(img);
 
         const finalCanvas = await html2canvas(chartCaptureContainer, { 
-          scale: 2.5, 
+          scale: 4, 
           useCORS: true, 
           logging: false 
         });
-        const finalImgData = finalCanvas.toDataURL('image/jpeg', 0.95);
+        const finalImgData = finalCanvas.toDataURL('image/jpeg', 1.0);
         
         const pdfWidth = doc.internal.pageSize.getWidth();
         const margin = 15;
@@ -452,8 +437,8 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
 
       doc.save(`Phieu_Hoc_Tap_${selectedStudent['HỌ TÊN HS']}_HD.pdf`);
     } catch (err) {
-      console.error("Student PDF Error:", err);
-      alert("Lỗi khi tạo phiếu học tập. Vui lòng thử lại.");
+      console.error(err);
+      alert("Lỗi khi tạo phiếu học tập sắc nét cao.");
     } finally {
       setIsExporting(false);
     }
@@ -501,6 +486,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
         </div>
 
         <div className="mt-8 space-y-8">
+          {/* Danh sách học sinh ĐÃ ĐÓNG */}
           <div>
             <h3 className="text-[11px] font-black text-emerald-600 uppercase mb-3 tracking-wider flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
@@ -516,6 +502,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
             </div>
           </div>
 
+          {/* Danh sách học sinh CHUẨN BỊ ĐÓNG */}
           <div>
             <h3 className="text-[11px] font-black text-red-500 uppercase mb-3 tracking-wider flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
@@ -531,6 +518,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
             </div>
           </div>
 
+          {/* Danh sách học sinh NỢ PHÍ CŨ */}
           <div>
             <h3 className="text-[11px] font-black text-orange-500 uppercase mb-3 tracking-wider flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
