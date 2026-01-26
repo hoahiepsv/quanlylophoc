@@ -88,7 +88,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
 
     const fees = (selectedStudent['ĐÓNG HỌC PHÍ'] || '').split(' ').filter(f => f);
     const schedule = (selectedStudent['LỊCH HỌC'] || '').split(' ').filter(d => d);
-    const absences = (selectedStudent['ĐIỂM DANH HS'] || '').split(' ').filter(d => d);
+    const absences = (selectedStudent['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).sort();
     
     const nowStr = today.toISOString().split('T')[0];
     const attendedCount = calculateAttended(selectedStudent);
@@ -113,15 +113,21 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
     return {
       attendedCount,
       absencesCount: absences.length,
+      absenceDates: absences,
       paidCount: fees.length,
+      paidMonths: fees,
       unpaidCount: unpaidMonths.length,
       unpaidLabels: unpaidMonths.join(', '),
       chartData
     };
   }, [selectedStudent, today]);
 
+  /**
+   * Capture HTML to Image with Mobile optimizations
+   */
   const captureAndAddSection = async (doc: jsPDF, html: string, yOffset: number): Promise<number> => {
     const container = document.createElement('div');
+    // Cố định width 1000px để layout không bị vỡ trên Mobile
     container.style.width = '1000px'; 
     container.style.padding = '40px 60px';
     container.style.fontFamily = '"Times New Roman", Times, serif';
@@ -130,19 +136,25 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
     container.style.color = '#000';
     container.style.backgroundColor = '#fff';
     container.style.position = 'fixed';
-    container.style.left = '-9999px';
+    container.style.top = '0';
+    container.style.left = '-2000px'; // Đẩy xa màn hình
+    container.style.zIndex = '-1000';
     container.innerHTML = html;
     document.body.appendChild(container);
 
+    // Chờ một chút để các style/image (nếu có) render xong
+    await new Promise(resolve => setTimeout(resolve, 150));
+
     const canvas = await html2canvas(container, { 
-      scale: 4, 
+      scale: 3, // Giảm scale xuống 3 thay vì 4 để tránh crash Mobile do quá nặng, vẫn đảm bảo HD
       useCORS: true, 
       backgroundColor: '#ffffff',
       logging: false,
-      windowWidth: 1000
+      windowWidth: 1000,
+      removeContainer: true
     });
     
-    const imgData = canvas.toDataURL('image/jpeg', 1.0);
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
     const pdfWidth = doc.internal.pageSize.getWidth();
     const margin = 15;
     const imgWidth = pdfWidth - (margin * 2);
@@ -179,7 +191,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
 
       currentY = await captureAndAddSection(doc, `
         <div style="text-align:center; border-bottom: 2px solid #1e3a8a; padding-bottom: 15px; margin-bottom: 20px;">
-          <h1 style="font-size:26pt; color:#1e3a8a; text-transform:uppercase; margin-bottom:5px;">Báo cáo tổng quan học tập</h1>
+          <h1 style="font-size:26pt; color:#1e3a8a; text-transform:uppercase; margin-bottom:5px; font-weight:bold;">BÁO CÁO TỔNG QUAN HỌC TẬP</h1>
           <p style="font-size:13pt; color:#444; margin:0;">Thời gian: Tháng ${currentMonth} Năm ${currentYear}</p>
           <p style="font-size:11pt; color:#666; margin-top:5px;">Ngày kết xuất: ${today.toLocaleDateString('vi-VN')} | Đơn vị: Trung tâm Hoà Hiệp AI</p>
         </div>
@@ -187,18 +199,18 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
 
       currentY = await captureAndAddSection(doc, `
         <div style="padding:25px; border:1px solid #cbd5e1; border-radius:15px; background:#f1f5f9; margin-bottom:25px;">
-          <h3 style="font-size:16pt; color:#1e3a8a; margin-top:0; margin-bottom:12px; border-bottom:1px solid #cbd5e1; padding-bottom:8px; font-weight:bold;">I. Nhận xét đánh giá chung:</h3>
-          <p style="text-align:justify; margin:0; line-height: 1.8; color: #1e293b;">${aiInsights}</p>
+          <h3 style="font-size:16pt; color:#1e3a8a; margin-top:0; margin-bottom:12px; border-bottom:1px solid #cbd5e1; padding-bottom:8px; font-weight:bold; text-transform:uppercase;">I. NHẬN XÉT ĐÁNH GIÁ CHUNG:</h3>
+          <p style="text-align:justify; margin:0; line-height: 1.8; color: #1e293b; font-size:14pt;">${aiInsights}</p>
         </div>
       `, currentY);
 
       currentY = await captureAndAddSection(doc, `
-        <h3 style="font-size:16pt; color:#1e3a8a; border-left:8px solid #1e3a8a; padding-left:15px; margin-bottom:15px; font-weight:bold;">II. Số liệu thống kê chi tiết:</h3>
+        <h3 style="font-size:16pt; color:#1e3a8a; border-left:8px solid #1e3a8a; padding-left:15px; margin-bottom:15px; font-weight:bold; text-transform:uppercase;">II. SỐ LIỆU THỐNG KÊ CHI TIẾT:</h3>
         <table style="width:100%; border-collapse:collapse; margin-bottom:10px; font-size:13pt;">
           <tr style="background:#1e3a8a; color:#fff;">
-            <th style="border:1px solid #000; padding:12px; text-align:left;">Hạng mục đánh giá</th>
-            <th style="border:1px solid #000; padding:12px; text-align:center; width:150px;">Số lượng</th>
-            <th style="border:1px solid #000; padding:12px; text-align:center; width:150px;">Tỷ lệ (%)</th>
+            <th style="border:1px solid #000; padding:12px; text-align:left;">HẠNG MỤC ĐÁNH GIÁ</th>
+            <th style="border:1px solid #000; padding:12px; text-align:center; width:150px;">SỐ LƯỢNG</th>
+            <th style="border:1px solid #000; padding:12px; text-align:center; width:150px;">TỶ LỆ (%)</th>
           </tr>
           <tr>
             <td style="border:1px solid #000; padding:12px;">Tổng số học sinh quản lý</td>
@@ -224,25 +236,25 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
       `, currentY);
 
       const tableTitles = [
-        { title: `Phụ lục 1: Danh sách hoàn thành học phí (Tháng ${currentMonth})`, list: classStats.paidThisMonth, type: 'paid' },
-        { title: `Phụ lục 2: Danh sách nhắc đóng phí (Tháng ${currentMonth})`, list: classStats.unpaidThisMonth, type: 'preparing' },
-        { title: `Phụ lục 3: Danh sách nợ tồn đọng (Tháng trước)`, list: classStats.debtors.map(d => d.student), type: 'debt' }
+        { title: `PHỤ LỤC 1: DANH SÁCH HOÀN THÀNH HỌC PHÍ (THÁNG ${currentMonth})`, list: classStats.paidThisMonth, type: 'paid' },
+        { title: `PHỤ LỤC 2: DANH SÁCH NHẮC ĐÓNG PHÍ (THÁNG ${currentMonth})`, list: classStats.unpaidThisMonth, type: 'preparing' },
+        { title: `PHỤ LỤC 3: DANH SÁCH NỢ TỒN ĐỌNG (THÁNG TRƯỚC)`, list: classStats.debtors.map(d => d.student), type: 'debt' }
       ];
 
       for (const entry of tableTitles) {
         if (entry.list.length > 0) {
           const isDebt = entry.type === 'debt';
           const tableHtml = `
-            <h3 style="font-size:15pt; color:#334155; border-left:8px solid #64748b; padding-left:15px; margin-top:30px; margin-bottom:12px; font-weight:bold;">${entry.title}</h3>
-            <table style="width:100%; border-collapse:collapse; font-size:10pt;">
+            <h3 style="font-size:15pt; color:#334155; border-left:8px solid #64748b; padding-left:15px; margin-top:30px; margin-bottom:12px; font-weight:bold; text-transform:uppercase;">${entry.title}</h3>
+            <table style="width:100%; border-collapse:collapse; font-size:11pt;">
               <tr style="background:#f8fafc;">
                 <th style="border:1px solid #000; padding:10px; width:40px; text-align:center;">STT</th>
-                <th style="border:1px solid #000; padding:10px;">Họ tên học sinh</th>
-                <th style="border:1px solid #000; padding:10px; width:55px; text-align:center;">Nhóm</th>
-                <th style="border:1px solid #000; padding:10px; width:85px; text-align:center;">Bắt đầu</th>
-                <th style="border:1px solid #000; padding:10px; width:65px; text-align:center;">Số buổi</th>
-                <th style="border:1px solid #000; padding:10px; width:100px; text-align:center;">SĐT</th>
-                ${isDebt ? '<th style="border:1px solid #000; padding:10px; width:140px; text-align:center;">Tháng nợ cũ</th>' : '<th style="border:1px solid #000; padding:10px; width:100px; text-align:center;">Ghi chú</th>'}
+                <th style="border:1px solid #000; padding:10px;">HỌ TÊN HỌC SINH</th>
+                <th style="border:1px solid #000; padding:10px; width:55px; text-align:center;">NHÓM</th>
+                <th style="border:1px solid #000; padding:10px; width:85px; text-align:center;">BẮT ĐẦU</th>
+                <th style="border:1px solid #000; padding:10px; width:65px; text-align:center;">SỐ BUỔI</th>
+                <th style="border:1px solid #000; padding:10px; width:120px; text-align:center;">SỐ ĐIỆN THOẠI</th>
+                ${isDebt ? '<th style="border:1px solid #000; padding:10px; width:140px; text-align:center;">THÁNG NỢ CŨ</th>' : '<th style="border:1px solid #000; padding:10px; width:100px; text-align:center;">GHI CHÚ</th>'}
               </tr>
               ${entry.list.map((s, idx) => {
                 const unpaid = isDebt ? (classStats.debtors.find(d => d.student === s)?.unpaidMonths.join(', ') || '') : '';
@@ -269,8 +281,10 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
 
       await captureAndAddSection(doc, `
         <div style="margin-top:50px; text-align:right; font-size:12pt;">
-           <p style="margin-bottom:80px; font-weight:bold;">NGƯỜI LẬP BÁO CÁO</p>
-           <p style="font-weight:bold; text-transform:uppercase;">LÊ HOÀ HIỆP</p>
+           <div style="display:inline-block; text-align:center; width:250px;">
+             <p style="margin-bottom:80px; font-weight:bold;">NGƯỜI LẬP BÁO CÁO</p>
+             <p style="font-weight:bold; text-transform:uppercase;">LÊ HOÀ HIỆP</p>
+           </div>
         </div>
         <div style="margin-top:20px; text-align:center; font-style:italic; font-size:10pt; color:#999; border-top:1px solid #eee; padding-top:15px;">
           Tài liệu nội bộ - Hệ thống quản lý học tập thông minh v2.0 - Hotline: 0983.676.470
@@ -280,7 +294,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
       doc.save(`Bao_Cao_Lop_T${currentMonth}_HD.pdf`);
     } catch (err) {
       console.error(err);
-      alert("Lỗi khi xuất PDF sắc nét cao.");
+      alert("Lỗi khi xuất PDF sắc nét cao. Vui lòng thử lại!");
     } finally {
       setIsExporting(false);
     }
@@ -306,40 +320,61 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
 
       let currentY = 15;
 
+      const detailedAbsences = studentDetailStats.absenceDates.map(d => formatDateVN(d)).join(', ') || 'Không vắng';
+      const detailedPaidMonths = studentDetailStats.paidMonths.join(', ') || 'Chưa đóng';
+      const periodStr = `Từ ${formatDateVN(selectedStudent['NGÀY BẮT ĐẦU'])} đến ${today.toLocaleDateString('vi-VN')}`;
+
       currentY = await captureAndAddSection(doc, `
         <div style="text-align:center; margin-bottom: 25px;">
-          <h1 style="font-size:26pt; color:#2563eb; text-transform:uppercase; margin-bottom:5px; font-weight:bold;">Phiếu theo dõi học tập</h1>
+          <h1 style="font-size:26pt; color:#2563eb; text-transform:uppercase; margin-bottom:5px; font-weight:bold;">PHIẾU THEO DÕI HỌC TẬP</h1>
         </div>
         <div style="display:flex; justify-content:space-between; margin-bottom:20px; border-top: 3px solid #2563eb; border-bottom: 3px solid #2563eb; padding: 15px 0;">
           <div style="width: 60%;">
-            <p style="margin:5px 0; font-size:14pt;"><strong>Họ và tên:</strong> <span style="font-size:18pt; color:#1e3a8a; font-weight:bold;">${selectedStudent['HỌ TÊN HS']}</span></p>
-            <p style="margin:5px 0; font-size:13pt;"><strong>Lớp đào tạo:</strong> ${selectedStudent['TÊN LỚP']} (Nhóm ${selectedStudent['KHỐI']})</p>
+            <p style="margin:5px 0; font-size:14pt;"><strong>HỌ VÀ TÊN:</strong> <span style="font-size:18pt; color:#1e3a8a; font-weight:bold;">${selectedStudent['HỌ TÊN HS']}</span></p>
+            <p style="margin:5px 0; font-size:13pt;"><strong>LỚP ĐÀO TẠO:</strong> ${selectedStudent['TÊN LỚP']} (Nhóm ${selectedStudent['KHỐI']})</p>
           </div>
           <div style="width: 40%; text-align:right;">
-            <p style="margin:5px 0; font-size:13pt;"><strong>Ngày tham gia:</strong> ${formatDateVN(selectedStudent['NGÀY BẮT ĐẦU'])}</p>
-            <p style="margin:5px 0; font-size:13pt;"><strong>Ngày in phiếu:</strong> ${today.toLocaleDateString('vi-VN')}</p>
+            <p style="margin:5px 0; font-size:13pt;"><strong>NGÀY THAM GIA:</strong> ${formatDateVN(selectedStudent['NGÀY BẮT ĐẦU'])}</p>
+            <p style="margin:5px 0; font-size:13pt;"><strong>NGÀY IN PHIẾU:</strong> ${today.toLocaleDateString('vi-VN')}</p>
           </div>
         </div>
       `, currentY);
 
       currentY = await captureAndAddSection(doc, `
         <div style="background:#f0f9ff; border-radius:15px; padding:25px; margin-bottom:25px; border:2px solid #bae6fd;">
-          <h3 style="margin-top:0; color:#0369a1; font-size:15pt; border-bottom:1px solid #bae6fd; padding-bottom:10px; margin-bottom:15px; font-weight:bold;">Lời nhắn từ Thầy / Cô:</h3>
+          <h3 style="margin-top:0; color:#0369a1; font-size:15pt; border-bottom:1px solid #bae6fd; padding-bottom:10px; margin-bottom:15px; font-weight:bold; text-transform:uppercase;">LỜI NHẮN TỪ THẦY / CÔ:</h3>
           <p style="font-style:italic; margin:0; text-align:justify; font-size:14pt; line-height:1.7;">"${aiComment}"</p>
         </div>
       `, currentY);
 
       currentY = await captureAndAddSection(doc, `
-        <h3 style="font-size:16pt; color:#1e3a8a; border-left:8px solid #2563eb; padding-left:15px; margin-bottom:15px; font-weight:bold;">Kết quả chuyên cần & Học phí:</h3>
-        <table style="width:100%; border-collapse:collapse; margin-bottom:25px; font-size:14pt;">
+        <h3 style="font-size:16pt; color:#1e3a8a; border-left:8px solid #2563eb; padding-left:15px; margin-bottom:15px; font-weight:bold; text-transform:uppercase;">KẾT QUẢ CHUYÊN CẦN & HỌC PHÍ:</h3>
+        <table style="width:100%; border-collapse:collapse; margin-bottom:25px; font-size:13pt;">
           <tr style="background:#2563eb; color:#fff;">
-            <th style="border:1px solid #000; padding:12px; text-align:left;">Các tiêu chí theo dõi</th>
-            <th style="border:1px solid #000; padding:12px; text-align:center; width:220px;">Kết quả đạt được</th>
+            <th style="border:1px solid #000; padding:12px; text-align:center; width:280px;">TIÊU CHÍ THEO DÕI</th>
+            <th style="border:1px solid #000; padding:12px; text-align:center; width:150px;">KẾT QUẢ</th>
+            <th style="border:1px solid #000; padding:12px; text-align:center;">CHI TIẾT:</th>
           </tr>
-          <tr><td style="border:1px solid #000; padding:12px;">Số buổi học tập trung thực tế</td><td style="border:1px solid #000; padding:12px; text-align:center; font-weight:bold; color:#059669;">${studentDetailStats.attendedCount} buổi</td></tr>
-          <tr><td style="border:1px solid #000; padding:12px;">Số buổi vắng mặt (có phép/không phép)</td><td style="border:1px solid #000; padding:12px; text-align:center; font-weight:bold; color:#dc2626;">${studentDetailStats.absencesCount} buổi</td></tr>
-          <tr><td style="border:1px solid #000; padding:12px;">Số tháng đã hoàn tất học phí</td><td style="border:1px solid #000; padding:12px; text-align:center; font-weight:bold;">${studentDetailStats.paidCount} tháng</td></tr>
-          <tr><td style="border:1px solid #000; padding:12px;">Tình trạng học phí tháng tới</td><td style="border:1px solid #000; padding:12px; text-align:center; font-weight:bold; color:#ea580c;">${studentDetailStats.unpaidLabels ? 'Cần bổ sung' : 'Hoàn thành ✅'}</td></tr>
+          <tr>
+            <td style="border:1px solid #000; padding:12px; text-align:center;">Số buổi học thực tế</td>
+            <td style="border:1px solid #000; padding:12px; text-align:center; font-weight:bold; color:#059669;">${studentDetailStats.attendedCount} buổi</td>
+            <td style="border:1px solid #000; padding:12px; text-align:center; color:#666;">${periodStr}</td>
+          </tr>
+          <tr>
+            <td style="border:1px solid #000; padding:12px; text-align:center;">Số buổi vắng mặt</td>
+            <td style="border:1px solid #000; padding:12px; text-align:center; font-weight:bold; color:#dc2626;">${studentDetailStats.absencesCount} buổi</td>
+            <td style="border:1px solid #000; padding:12px; text-align:center; font-size:11pt;">${detailedAbsences}</td>
+          </tr>
+          <tr>
+            <td style="border:1px solid #000; padding:12px; text-align:center;">Số tháng đã đóng phí</td>
+            <td style="border:1px solid #000; padding:12px; text-align:center; font-weight:bold;">${studentDetailStats.paidCount} tháng</td>
+            <td style="border:1px solid #000; padding:12px; text-align:center; font-size:11pt;">${detailedPaidMonths}</td>
+          </tr>
+          <tr>
+            <td style="border:1px solid #000; padding:12px; text-align:center;">Các tháng còn nợ học phí</td>
+            <td style="border:1px solid #000; padding:12px; text-align:center; font-weight:bold; color:#dc2626;">${studentDetailStats.unpaidCount} tháng</td>
+            <td style="border:1px solid #000; padding:12px; text-align:center; font-weight:bold; color:#dc2626; font-size:11pt;">${studentDetailStats.unpaidLabels || 'Đã hoàn thành ✅'}</td>
+          </tr>
         </table>
       `, currentY);
 
@@ -350,16 +385,18 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
         chartCaptureContainer.style.backgroundColor = '#ffffff';
         chartCaptureContainer.style.fontFamily = '"Times New Roman", Times, serif';
         chartCaptureContainer.style.position = 'fixed';
-        chartCaptureContainer.style.left = '-9999px';
+        chartCaptureContainer.style.top = '0';
+        chartCaptureContainer.style.left = '-2000px';
+        chartCaptureContainer.style.zIndex = '-1000';
         
         chartCaptureContainer.innerHTML = `
-          <h3 style="font-size:16pt; font-weight:bold; color:#1e3a8a; margin-bottom:20px; border-left:8px solid #1e3a8a; padding-left:15px;">Biểu đồ diễn biến chuyên cần (12 tháng gần nhất):</h3>
+          <h3 style="font-size:16pt; font-weight:bold; color:#1e3a8a; margin-bottom:20px; border-left:8px solid #1e3a8a; padding-left:15px; text-transform:uppercase;">BIỂU ĐỒ DIỄN BIẾN CHUYÊN CẦN:</h3>
           <div id="chart-image-target" style="width: 100%; height: 400px; border: 1px solid #eee; border-radius: 10px; padding: 10px;"></div>
         `;
         document.body.appendChild(chartCaptureContainer);
 
         const originalChartCanvas = await html2canvas(chartRef.current, { 
-          scale: 4, 
+          scale: 3, 
           useCORS: true,
           logging: false 
         });
@@ -371,12 +408,8 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
         img.style.width = '100%';
         target.appendChild(img);
 
-        const finalCanvas = await html2canvas(chartCaptureContainer, { 
-          scale: 4, 
-          useCORS: true, 
-          logging: false 
-        });
-        const finalImgData = finalCanvas.toDataURL('image/jpeg', 1.0);
+        const finalCanvas = await html2canvas(chartCaptureContainer, { scale: 3, useCORS: true, logging: false });
+        const finalImgData = finalCanvas.toDataURL('image/jpeg', 0.95);
         
         const pdfWidth = doc.internal.pageSize.getWidth();
         const margin = 15;
@@ -394,15 +427,17 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
       }
 
       await captureAndAddSection(doc, `
-        <div style="display:flex; justify-content:space-between; margin-top:40px;">
+        <div style="display:flex; justify-content:space-between; margin-top:40px; font-size:13pt;">
           <div style="text-align:center; width: 45%;">
             <p style="font-weight:bold;">XÁC NHẬN CỦA PHỤ HUYNH</p>
-            <p style="font-size:10pt; font-style:italic;">(Ký và ghi rõ họ tên)</p>
+            <p style="font-size:11pt; font-style:italic;">(Ký và ghi rõ họ tên)</p>
           </div>
           <div style="text-align:center; width: 45%;">
-             <p style="font-weight:bold;">GIÁO VIÊN CHỦ NHIỆM</p>
-             <p style="font-size:10pt; font-style:italic;">(Đã phê duyệt điện tử)</p>
-             <p style="margin-top:70px; font-weight:bold; font-size:14pt;">LÊ HOÀ HIỆP</p>
+             <div style="display:inline-block; text-align:center;">
+               <p style="font-weight:bold;">GIÁO VIÊN CHỦ NHIỆM</p>
+               <p style="font-size:11pt; font-style:italic;">(Đã phê duyệt điện tử)</p>
+               <p style="margin-top:70px; font-weight:bold; font-size:16pt;">LÊ HOÀ HIỆP</p>
+             </div>
           </div>
         </div>
       `, currentY);
@@ -410,7 +445,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
       doc.save(`Phieu_Hoc_Tap_${selectedStudent['HỌ TÊN HS']}_HD.pdf`);
     } catch (err) {
       console.error(err);
-      alert("Lỗi khi tạo phiếu học tập sắc nét cao.");
+      alert("Lỗi khi tạo phiếu học tập. Vui lòng thử lại!");
     } finally {
       setIsExporting(false);
     }
@@ -418,115 +453,116 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
 
   return (
     <div className="space-y-8 animate-fadeIn">
-      <div className="bg-white p-8 rounded-2xl shadow-xl border border-blue-50">
+      <div className="bg-white p-6 md:p-8 rounded-2xl shadow-xl border border-blue-50">
         <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
-          <h2 className="text-xl font-black text-blue-900 uppercase flex items-center gap-3">
+          <h2 className="text-lg md:text-xl font-black text-blue-900 uppercase flex items-center gap-3">
             <span className="w-2 h-8 bg-blue-600 rounded-full"></span>
             Thống kê nhóm (T{currentMonth}/{currentYear})
           </h2>
           <button 
             onClick={exportClassReport}
             disabled={isExporting}
-            className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-3 rounded-xl font-black text-sm shadow-lg flex items-center gap-2 transition-all active:scale-95 disabled:bg-gray-400"
+            className="w-full md:w-auto bg-blue-700 hover:bg-blue-800 text-white px-6 py-3.5 rounded-xl font-black text-xs md:text-sm shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95 disabled:bg-gray-400"
           >
             {isExporting ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                ĐANG XỬ LÝ HD...
+                ĐANG XUẤT HD...
               </>
-            ) : "XUẤT BÁO CÁO NHÓM (PDF HD)"}
+            ) : (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                XUẤT BÁO CÁO NHÓM (HD)
+              </>
+            )}
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100">
-            <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Sĩ số nhóm</p>
-            <p className="text-3xl font-black text-blue-900">{students.length}</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+          <div className="bg-blue-50 p-4 md:p-6 rounded-2xl border border-blue-100">
+            <p className="text-[9px] md:text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Sĩ số nhóm</p>
+            <p className="text-2xl md:text-3xl font-black text-blue-900">{students.length}</p>
           </div>
-          <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-100">
-            <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Đã đóng (T{currentMonth})</p>
-            <p className="text-3xl font-black text-emerald-600">{classStats.paidThisMonth.length}</p>
+          <div className="bg-emerald-50 p-4 md:p-6 rounded-2xl border border-emerald-100">
+            <p className="text-[9px] md:text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Đã đóng (T{currentMonth})</p>
+            <p className="text-2xl md:text-3xl font-black text-emerald-600">{classStats.paidThisMonth.length}</p>
           </div>
-          <div className="bg-red-50 p-6 rounded-2xl border border-red-100">
-            <p className="text-[10px] font-black text-red-400 uppercase tracking-widest mb-1">Chuẩn bị đóng (T{currentMonth})</p>
-            <p className="text-3xl font-black text-red-600">{classStats.unpaidThisMonth.length}</p>
+          <div className="bg-red-50 p-4 md:p-6 rounded-2xl border border-red-100">
+            <p className="text-[9px] md:text-[10px] font-black text-red-400 uppercase tracking-widest mb-1">Cần đóng (T{currentMonth})</p>
+            <p className="text-2xl md:text-3xl font-black text-red-600">{classStats.unpaidThisMonth.length}</p>
           </div>
-          <div className="bg-orange-50 p-6 rounded-2xl border border-orange-100">
-            <p className="text-[10px] font-black text-orange-400 uppercase tracking-widest mb-1">Nợ phí cũ</p>
-            <p className="text-3xl font-black text-orange-600">{classStats.debtors.length}</p>
+          <div className="bg-orange-50 p-4 md:p-6 rounded-2xl border border-orange-100">
+            <p className="text-[9px] md:text-[10px] font-black text-orange-400 uppercase tracking-widest mb-1">Nợ phí cũ</p>
+            <p className="text-2xl md:text-3xl font-black text-orange-600">{classStats.debtors.length}</p>
           </div>
         </div>
 
         <div className="mt-8 space-y-8">
-          {/* Danh sách học sinh ĐÃ ĐÓNG */}
           <div>
-            <h3 className="text-[11px] font-black text-emerald-600 uppercase mb-3 tracking-wider flex items-center gap-2">
+            <h3 className="text-[10px] md:text-[11px] font-black text-emerald-600 uppercase mb-3 tracking-wider flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
-              Học sinh đã hoàn thành học phí tháng này
+              Đã hoàn thành học phí tháng này
             </h3>
             <div className="flex flex-wrap gap-2">
               {classStats.paidThisMonth.map((s, i) => (
-                <span key={i} className="bg-emerald-50 text-emerald-700 px-3 py-2 rounded-xl text-[11px] font-bold border border-emerald-100 shadow-sm">
-                  {s['HỌ TÊN HS']} - <span className="opacity-60">{s['TÊN LỚP']}</span>
+                <span key={i} className="bg-emerald-50 text-emerald-700 px-3 py-2 rounded-xl text-[10px] md:text-[11px] font-bold border border-emerald-100 shadow-sm">
+                  {s['HỌ TÊN HS']}
                 </span>
               ))}
-              {classStats.paidThisMonth.length === 0 && <span className="text-gray-400 font-bold text-xs italic">Chưa có ai hoàn thành học phí tháng này.</span>}
+              {classStats.paidThisMonth.length === 0 && <span className="text-gray-400 font-bold text-xs italic">Chưa có dữ liệu tháng này.</span>}
             </div>
           </div>
 
-          {/* Danh sách học sinh CHUẨN BỊ ĐÓNG */}
           <div>
-            <h3 className="text-[11px] font-black text-red-500 uppercase mb-3 tracking-wider flex items-center gap-2">
+            <h3 className="text-[10px] md:text-[11px] font-black text-red-500 uppercase mb-3 tracking-wider flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
-              Học sinh chuẩn bị đóng phí tháng này
+              Chuẩn bị đóng phí tháng này
             </h3>
             <div className="flex flex-wrap gap-2">
               {classStats.unpaidThisMonth.map((s, i) => (
-                <span key={i} className="bg-red-50 text-red-700 px-3 py-2 rounded-xl text-[11px] font-bold border border-red-100 shadow-sm">
-                  {s['HỌ TÊN HS']} - <span className="opacity-60">{s['TÊN LỚP']}</span>
+                <span key={i} className="bg-red-50 text-red-700 px-3 py-2 rounded-xl text-[10px] md:text-[11px] font-bold border border-red-100 shadow-sm">
+                  {s['HỌ TÊN HS']}
                 </span>
               ))}
-              {classStats.unpaidThisMonth.length === 0 && <span className="text-emerald-600 font-bold text-xs">Tất cả đã hoàn thành! ✅</span>}
             </div>
           </div>
 
-          {/* Danh sách học sinh NỢ PHÍ CŨ */}
           <div>
-            <h3 className="text-[11px] font-black text-orange-500 uppercase mb-3 tracking-wider flex items-center gap-2">
+            <h3 className="text-[10px] md:text-[11px] font-black text-orange-500 uppercase mb-3 tracking-wider flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
-              Học sinh nợ phí các tháng trước
+              Tồn đọng phí các tháng trước
             </h3>
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap gap-2">
               {classStats.debtors.map((d, i) => (
-                <div key={i} className="bg-white border border-orange-200 px-4 py-2.5 rounded-2xl shadow-sm flex items-center gap-3">
-                  <span className="text-xs font-bold text-gray-800">
-                    {d.student['HỌ TÊN HS']} - <span className="text-gray-400 font-medium">{d.student['TÊN LỚP']}</span>
-                  </span>
-                  <span className="text-[10px] font-black bg-orange-100 text-orange-700 px-2.5 py-1 rounded-lg uppercase border border-orange-200">
+                <div key={i} className="bg-white border border-orange-200 px-3 py-2 rounded-xl shadow-sm flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-gray-800">{d.student['HỌ TÊN HS']}</span>
+                  <span className="text-[9px] font-black bg-orange-100 text-orange-700 px-2 py-0.5 rounded-lg border border-orange-200 uppercase">
                     Nợ: {d.unpaidMonths.join(', ')}
                   </span>
                 </div>
               ))}
-              {classStats.debtors.length === 0 && <span className="text-emerald-600 font-bold text-xs">Tuyệt vời! Không có nợ cũ. ✨</span>}
+              {classStats.debtors.length === 0 && <span className="text-emerald-600 font-bold text-xs">Không có nợ cũ.</span>}
             </div>
           </div>
         </div>
       </div>
 
-      <div className="bg-white p-8 rounded-2xl shadow-xl border border-blue-50">
-        <h2 className="text-xl font-black text-blue-900 uppercase mb-8 flex items-center gap-3">
+      <div className="bg-white p-6 md:p-8 rounded-2xl shadow-xl border border-blue-50">
+        <h2 className="text-lg md:text-xl font-black text-blue-900 uppercase mb-8 flex items-center gap-3">
           <span className="w-2 h-8 bg-blue-600 rounded-full"></span>
-          Báo cáo cá nhân
+          Phiếu học tập cá nhân
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <div className="md:col-span-3">
             <select 
-              className="w-full p-4 border border-gray-200 rounded-xl font-bold text-gray-700 bg-slate-50 outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
+              className="w-full p-4 border border-gray-200 rounded-xl font-bold text-gray-700 bg-slate-50 outline-none focus:ring-2 focus:ring-blue-500 shadow-sm text-sm"
               value={selectedStudentName}
               onChange={(e) => setSelectedStudentName(e.target.value)}
             >
-              <option value="">-- Chọn học sinh để xem dữ liệu chi tiết --</option>
+              <option value="">-- Chọn học sinh xuất phiếu --</option>
               {students.map((s, idx) => (
                 <option key={idx} value={s['HỌ TÊN HS']}>{s['HỌ TÊN HS']} (Nhóm {s['KHỐI']})</option>
               ))}
@@ -535,54 +571,58 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
           <button
             onClick={exportStudentReport}
             disabled={!selectedStudent || isExporting}
-            className={`flex items-center justify-center gap-2 px-6 py-4 rounded-xl font-black transition-all shadow-lg active:scale-95 ${
+            className={`flex items-center justify-center gap-2 px-6 py-4 rounded-xl font-black text-xs md:text-sm transition-all shadow-lg active:scale-95 ${
               selectedStudent && !isExporting ? 'bg-blue-700 text-white hover:bg-blue-800' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
             }`}
           >
-            {isExporting ? "ĐANG TẠO PDF..." : "XUẤT PHIẾU HD (PDF)"}
+            {isExporting ? "ĐANG XỬ LÝ..." : (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                XUẤT PHIẾU HD
+              </>
+            )}
           </button>
         </div>
 
         {selectedStudent && studentDetailStats && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 animate-slideUp">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-10 animate-slideUp">
             <div className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
-                <div className="bg-slate-50 p-5 rounded-2xl border border-gray-100">
-                  <p className="text-[10px] font-black text-gray-400 uppercase mb-1">Ngày bắt đầu</p>
-                  <p className="text-lg font-bold text-blue-900">{formatDateVN(selectedStudent['NGÀY BẮT ĐẦU'])}</p>
+                <div className="bg-slate-50 p-4 md:p-5 rounded-2xl border border-gray-100">
+                  <p className="text-[9px] md:text-[10px] font-black text-gray-400 uppercase mb-1">Ngày tham gia</p>
+                  <p className="text-base md:text-lg font-bold text-blue-900">{formatDateVN(selectedStudent['NGÀY BẮT ĐẦU'])}</p>
                 </div>
-                <div className="bg-slate-50 p-5 rounded-2xl border border-gray-100">
-                  <p className="text-[10px] font-black text-gray-400 uppercase mb-1">Số buổi đã học</p>
-                  <p className="text-lg font-bold text-emerald-600">{studentDetailStats.attendedCount}</p>
+                <div className="bg-slate-50 p-4 md:p-5 rounded-2xl border border-gray-100">
+                  <p className="text-[9px] md:text-[10px] font-black text-gray-400 uppercase mb-1">Đã học thực tế</p>
+                  <p className="text-base md:text-lg font-bold text-emerald-600">{studentDetailStats.attendedCount} buổi</p>
                 </div>
-                <div className="bg-slate-50 p-5 rounded-2xl border border-gray-100">
-                  <p className="text-[10px] font-black text-gray-400 uppercase mb-1">Số buổi vắng</p>
-                  <p className="text-lg font-bold text-red-500">{studentDetailStats.absencesCount}</p>
+                <div className="bg-slate-50 p-4 md:p-5 rounded-2xl border border-gray-100">
+                  <p className="text-[9px] md:text-[10px] font-black text-gray-400 uppercase mb-1">Vắng mặt</p>
+                  <p className="text-base md:text-lg font-bold text-red-500">{studentDetailStats.absencesCount} buổi</p>
                 </div>
-                <div className="bg-slate-50 p-5 rounded-2xl border border-gray-100">
-                  <p className="text-[10px] font-black text-gray-400 uppercase mb-1">Số tháng đóng phí</p>
-                  <p className="text-lg font-bold text-blue-600">{studentDetailStats.paidCount}</p>
+                <div className="bg-slate-50 p-4 md:p-5 rounded-2xl border border-gray-100">
+                  <p className="text-[9px] md:text-[10px] font-black text-gray-400 uppercase mb-1">Tháng đã đóng</p>
+                  <p className="text-base md:text-lg font-bold text-blue-600">{studentDetailStats.paidCount} tháng</p>
                 </div>
               </div>
-              <div className="bg-orange-50 p-6 rounded-2xl border border-orange-100">
-                <p className="text-[10px] font-black text-orange-400 uppercase mb-2 tracking-widest">Tháng chuẩn bị đóng học phí</p>
-                <p className="text-sm font-bold text-orange-800">{studentDetailStats.unpaidLabels || "Đã hoàn thành đầy đủ!"}</p>
+              <div className="bg-orange-50 p-5 md:p-6 rounded-2xl border border-orange-100">
+                <p className="text-[9px] md:text-[10px] font-black text-orange-400 uppercase mb-2 tracking-widest">Các tháng còn nợ học phí</p>
+                <p className="text-sm font-bold text-orange-800">{studentDetailStats.unpaidLabels || "Đã hoàn thành!"}</p>
               </div>
             </div>
 
-            <div 
-              ref={chartRef}
-              className="bg-white p-6 rounded-2xl border border-gray-200 min-h-[350px]"
-            >
-              <p className="text-[10px] font-black text-gray-400 uppercase mb-6 tracking-widest text-center">Biểu đồ chuyên cần (Buổi/Tháng)</p>
-              <div className="h-[280px] w-full">
+            <div ref={chartRef} className="bg-white p-4 md:p-6 rounded-2xl border border-gray-200 min-h-[300px]">
+              <p className="text-[10px] font-black text-gray-400 uppercase mb-6 tracking-widest text-center">Diễn biến chuyên cần (Buổi/Tháng)</p>
+              <div className="h-[250px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={studentDetailStats.chartData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                    <XAxis dataKey="name" tick={{fontSize: 10, fontWeights: 900}} axisLine={false} tickLine={false} dy={10} />
-                    <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10}} />
+                    <XAxis dataKey="name" tick={{fontSize: 9, fontWeight: 900}} axisLine={false} tickLine={false} dy={10} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fontSize: 9}} />
                     <Tooltip cursor={{fill: '#f1f5f9'}} />
-                    <Bar dataKey="count" radius={[6, 6, 0, 0]} barSize={35}>
+                    <Bar dataKey="count" radius={[4, 4, 0, 0]} barSize={25}>
                       {studentDetailStats.chartData.map((_, index) => (
                         <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#2563eb' : '#3b82f6'} />
                       ))}
