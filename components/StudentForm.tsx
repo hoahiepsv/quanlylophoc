@@ -15,12 +15,14 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
     'KHỐI': '',
     'TÊN LỚP': '',
     'SỐ ĐIỆN THOẠI 1': '',
-    'SỐ ĐIỆY THOẠI 2': '',
+    'SỐ ĐIỆN THOẠI 2': '',
     'NGÀY BẮT ĐẦU': new Date().toISOString().split('T')[0],
     'LỊCH HỌC': '',
     'ĐIỂM DANH HS': '',
     'ĐÓNG HỌC PHÍ': '',
   });
+
+  const [isTutoring, setIsTutoring] = useState(false);
 
   useEffect(() => {
     if (initialData) {
@@ -28,6 +30,16 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
       if (sanitized['NGÀY BẮT ĐẦU']) {
         sanitized['NGÀY BẮT ĐẦU'] = sanitized['NGÀY BẮT ĐẦU'].split(/[T ]/)[0];
       }
+      
+      // Xử lý tách nhãn "Kèm Riêng" từ dữ liệu KHỐI
+      const khoiValue = String(sanitized['KHỐI'] || '');
+      if (khoiValue.includes(' - Kèm Riêng')) {
+        setIsTutoring(true);
+        sanitized['KHỐI'] = khoiValue.replace(' - Kèm Riêng', '');
+      } else {
+        setIsTutoring(false);
+      }
+
       setFormData(prev => ({ ...prev, ...sanitized }));
     }
   }, [initialData]);
@@ -113,6 +125,18 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
     setFormData(prev => ({ ...prev, [field]: newVal.join(' ') }));
   };
 
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Tạo bản sao dữ liệu để điều chỉnh giá trị KHỐI trước khi gửi
+    const submissionData = { ...formData };
+    if (isTutoring && submissionData['KHỐI']) {
+      submissionData['KHỐI'] = `${submissionData['KHỐI']} - Kèm Riêng`;
+    }
+    
+    onSubmit(submissionData);
+  };
+
   // Tính toán số buổi đã học và đã chọn
   const scheduleArray = (formData['LỊCH HỌC'] || '').split(' ').filter(d => d);
   const absenceArray = (formData['ĐIỂM DANH HS'] || '').split(' ').filter(d => d);
@@ -171,7 +195,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
         {title}
       </h2>
       
-      <form className="space-y-8" onSubmit={(e) => { e.preventDefault(); onSubmit(formData); }}>
+      <form className="space-y-8" onSubmit={handleFormSubmit}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
           <div className="space-y-6">
             <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest">Thông tin cơ bản</h3>
@@ -189,7 +213,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
               </div>
               <div className="grid grid-cols-2 gap-3">
                  <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1.5">NHÓM</label>
+                  <label className="block text-xs font-bold text-gray-700 mb-1.5">NHÓM (KHỐI)</label>
                   <select 
                     name="KHỐI" 
                     value={formData['KHỐI']} 
@@ -213,6 +237,25 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
                   />
                 </div>
               </div>
+
+              {/* Ô stick Kèm Riêng */}
+              <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 flex items-center justify-between">
+                <div>
+                  <label className="text-xs font-black text-amber-800 uppercase block">Chế độ học tập</label>
+                  <span className="text-[10px] text-amber-600 font-medium">Chọn nếu học sinh học kèm riêng 1:1</span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    checked={isTutoring}
+                    onChange={(e) => setIsTutoring(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
+                  <span className="ml-3 text-xs font-black text-amber-900 uppercase">KÈM RIÊNG</span>
+                </label>
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1.5">SỐ ĐIỆN THOẠI 1 (Zalo)</label>
                 <input 
