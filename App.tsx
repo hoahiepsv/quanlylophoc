@@ -198,7 +198,7 @@ const App: React.FC = () => {
             </button>
           </form>
           <div className="mt-8 text-center text-[10px] text-gray-400 italic">
-            Create by Hoà Hiệp AI – 0983.676.470
+            Create by Hoà Hiệp - 0983.676.470
           </div>
         </div>
       </div>
@@ -215,7 +215,7 @@ const App: React.FC = () => {
             </div>
             <div>
               <h1 className="text-lg font-bold tracking-tight uppercase leading-none">QUẢN LÝ LỚP HỌC</h1>
-              <p className="text-[9px] opacity-75 mt-0.5">Realtime Datasheet v1.7</p>
+              <p className="text-[9px] opacity-75 mt-0.5">Create by Hoà Hiệp - 0983.676.470</p>
             </div>
           </div>
 
@@ -539,7 +539,7 @@ const App: React.FC = () => {
              </div>
           </div>
           <div className="text-xs md:text-sm font-black text-gray-400 italic">
-            Zalo hỗ trợ kỹ thuật: <span className="text-blue-600">0983.676.470</span>
+            Create by Hoà Hiệp - 0983.676.470
           </div>
         </div>
       </footer>
