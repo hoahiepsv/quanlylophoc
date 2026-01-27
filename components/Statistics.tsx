@@ -5,6 +5,21 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { geminiService } from '../services/geminiService';
+import { 
+  Document, 
+  Packer, 
+  Paragraph, 
+  TextRun, 
+  Table, 
+  TableRow, 
+  TableCell, 
+  AlignmentType, 
+  WidthType, 
+  BorderStyle,
+  VerticalAlign,
+  ImageRun,
+  HeightRule
+} from 'docx';
 
 interface StatisticsProps {
   students: Student[];
@@ -19,6 +34,10 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
   const currentMonth = today.getMonth() + 1;
   const currentYear = today.getFullYear();
   const currentMonthTag = `T${currentMonth}/${currentYear}`;
+  
+  const PDF_MARGIN = 10;
+  const WORD_FONT = "Times New Roman";
+  const WORD_SIZE = 26; // 13pt = 26 half-points in docx
 
   const formatDateVN = (dateStr: string) => {
     if (!dateStr) return '';
@@ -125,7 +144,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
   const captureAndAddSection = async (doc: jsPDF, html: string, yOffset: number): Promise<number> => {
     const container = document.createElement('div');
     container.style.width = '1000px'; 
-    container.style.padding = '40px 60px';
+    container.style.padding = '30px 40px'; 
     container.style.fontFamily = '"Times New Roman", Times, serif';
     container.style.fontSize = '14pt';
     container.style.lineHeight = '1.6';
@@ -146,7 +165,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
     
     const imgData = canvas.toDataURL('image/jpeg', 1.0);
     const pdfWidth = doc.internal.pageSize.getWidth();
-    const margin = 15;
+    const margin = PDF_MARGIN;
     const imgWidth = pdfWidth - (margin * 2);
     const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
@@ -177,7 +196,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
         debtors: classStats.debtors.length
       });
 
-      let currentY = 15;
+      let currentY = PDF_MARGIN;
 
       currentY = await captureAndAddSection(doc, `
         <div style="text-align:center; border-bottom: 2px solid #1e3a8a; padding-bottom: 15px; margin-bottom: 20px;">
@@ -276,15 +295,212 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
              <p style="font-weight:bold; text-transform:uppercase;">LÊ HOÀ HIỆP</p>
            </div>
         </div>
-        <div style="margin-top:20px; text-align:center; font-style:italic; font-size:10pt; color:#999; border-top:1px solid #eee; padding-top:15px;">
-          Tài liệu nội bộ - Hệ thống quản lý học tập thông minh v2.0 - Hotline: 0983.676.470
-        </div>
       `, currentY);
 
       doc.save(`Bao_Cao_Lop_T${currentMonth}_HD.pdf`);
     } catch (err) {
       console.error(err);
-      alert("Lỗi khi xuất PDF sắc nét cao.");
+      alert("Lỗi khi xuất PDF.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const exportClassReportWord = async () => {
+    setIsExporting(true);
+    try {
+      const aiInsights = await geminiService.generateReportContent('class', {
+        total: students.length,
+        paid: classStats.paidThisMonth.length,
+        unpaid: classStats.unpaidThisMonth.length,
+        debtors: classStats.debtors.length
+      });
+
+      const tableTitles = [
+        { title: `PHỤ LỤC 1: DANH SÁCH HOÀN THÀNH HỌC PHÍ (THÁNG ${currentMonth})`, list: classStats.paidThisMonth, type: 'paid' },
+        { title: `PHỤ LỤC 2: DANH SÁCH NHẮC ĐÓNG PHÍ (THÁNG ${currentMonth})`, list: classStats.unpaidThisMonth, type: 'preparing' },
+        { title: `PHỤ LỤC 3: DANH SÁCH NỢ TỒN ĐỌNG (THÁNG TRƯỚC)`, list: classStats.debtors.map(d => d.student), type: 'debt' }
+      ];
+
+      const children = [
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          children: [
+            new TextRun({
+              text: "BÁO CÁO TỔNG QUAN HỌC TẬP",
+              bold: true,
+              size: 36,
+              font: WORD_FONT,
+              color: "1e3a8a",
+            }),
+          ],
+        }),
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          children: [
+            new TextRun({ text: `Thời gian: Tháng ${currentMonth} Năm ${currentYear}`, font: WORD_FONT, size: WORD_SIZE }),
+          ],
+        }),
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          children: [
+            new TextRun({ text: `Ngày kết xuất: ${today.toLocaleDateString('vi-VN')} | Đơn vị: Trung tâm Hoà Hiệp AI`, font: WORD_FONT, size: 22, color: "666666" }),
+          ],
+          spacing: { after: 400 },
+          border: { bottom: { style: BorderStyle.SINGLE, size: 12, color: "1e3a8a" } },
+        }),
+
+        new Paragraph({
+          spacing: { before: 400, after: 200 },
+          children: [
+            new TextRun({ text: "I. NHẬN XÉT ĐÁNH GIÁ CHUNG:", bold: true, font: WORD_FONT, size: 32, color: "1e3a8a" }),
+          ],
+        }),
+        new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          rows: [
+            new TableRow({
+              children: [
+                new TableCell({
+                  shading: { fill: "f1f5f9" },
+                  margins: { top: 200, bottom: 200, left: 200, right: 200 },
+                  children: [
+                    new Paragraph({
+                      alignment: AlignmentType.JUSTIFY,
+                      children: [
+                        new TextRun({ text: aiInsights, font: WORD_FONT, size: WORD_SIZE }),
+                      ],
+                    }),
+                  ],
+                }),
+              ],
+            }),
+          ],
+        }),
+
+        new Paragraph({
+          spacing: { before: 400, after: 200 },
+          children: [
+            new TextRun({ text: "II. SỐ LIỆU THỐNG KÊ CHI TIẾT:", bold: true, font: WORD_FONT, size: 32, color: "1e3a8a" }),
+          ],
+        }),
+        new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          rows: [
+            new TableRow({
+              children: [
+                new TableCell({ shading: { fill: "1e3a8a" }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Hạng mục đánh giá", bold: true, color: "ffffff", font: WORD_FONT, size: WORD_SIZE })] })] }),
+                new TableCell({ shading: { fill: "1e3a8a" }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Số lượng", bold: true, color: "ffffff", font: WORD_FONT, size: WORD_SIZE })] })] }),
+                new TableCell({ shading: { fill: "1e3a8a" }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Tỷ lệ", bold: true, color: "ffffff", font: WORD_FONT, size: WORD_SIZE })] })] }),
+              ],
+            }),
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph({ text: "Tổng số học sinh quản lý", font: WORD_FONT, size: WORD_SIZE })] }),
+                new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${students.length}`, bold: true, font: WORD_FONT, size: WORD_SIZE })] })] }),
+                new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, text: "100%", font: WORD_FONT, size: WORD_SIZE })] }),
+              ],
+            }),
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph({ text: `Đã hoàn thành học phí (T${currentMonth})`, font: WORD_FONT, size: WORD_SIZE })] }),
+                new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${classStats.paidThisMonth.length}`, bold: true, font: WORD_FONT, size: WORD_SIZE })] })] }),
+                new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, text: `${((classStats.paidThisMonth.length / students.length) * 100).toFixed(1)}%`, font: WORD_FONT, size: WORD_SIZE })] }),
+              ],
+            }),
+            new TableRow({
+              children: [
+                new TableCell({ children: [new Paragraph({ text: `Chưa hoàn thành học phí (T${currentMonth})`, font: WORD_FONT, size: WORD_SIZE })] }),
+                new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${classStats.unpaidThisMonth.length}`, bold: true, font: WORD_FONT, size: WORD_SIZE })] })] }),
+                new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, text: `${((classStats.unpaidThisMonth.length / students.length) * 100).toFixed(1)}%`, font: WORD_FONT, size: WORD_SIZE })] }),
+              ],
+            }),
+          ],
+        }),
+      ];
+
+      // Add Appendices
+      for (const entry of tableTitles) {
+        if (entry.list.length > 0) {
+          const isDebt = entry.type === 'debt';
+          
+          children.push(new Paragraph({
+            spacing: { before: 600, after: 200 },
+            children: [
+              new TextRun({ text: entry.title, bold: true, font: WORD_FONT, size: 28, color: "334155" }),
+            ],
+          }));
+
+          children.push(new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [
+              new TableRow({
+                children: [
+                  new TableCell({ shading: { fill: "f8fafc" }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "STT", bold: true, font: WORD_FONT, size: 20 })] })] }),
+                  new TableCell({ shading: { fill: "f8fafc" }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Họ tên học sinh", bold: true, font: WORD_FONT, size: 20 })] })] }),
+                  new TableCell({ shading: { fill: "f8fafc" }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Nhóm", bold: true, font: WORD_FONT, size: 20 })] })] }),
+                  new TableCell({ shading: { fill: "f8fafc" }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Bắt đầu", bold: true, font: WORD_FONT, size: 20 })] })] }),
+                  new TableCell({ shading: { fill: "f8fafc" }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Số buổi", bold: true, font: WORD_FONT, size: 20 })] })] }),
+                  new TableCell({ shading: { fill: "f8fafc" }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "SĐT", bold: true, font: WORD_FONT, size: 20 })] })] }),
+                  new TableCell({ shading: { fill: "f8fafc" }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: isDebt ? "Tháng nợ" : "Ghi chú", bold: true, font: WORD_FONT, size: 20 })] })] }),
+                ],
+              }),
+              ...entry.list.map((s, idx) => {
+                const unpaid = isDebt ? (classStats.debtors.find(d => d.student === s)?.unpaidMonths.join(', ') || '') : '';
+                return new TableRow({
+                  children: [
+                    new TableCell({ verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, text: `${idx + 1}`, font: WORD_FONT, size: 20 })] }),
+                    new TableCell({ verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ children: [new TextRun({ text: s['HỌ TÊN HS'], bold: true, font: WORD_FONT, size: 20 })] })] }),
+                    new TableCell({ verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, text: s['TÊN LỚP'], font: WORD_FONT, size: 20 })] }),
+                    new TableCell({ verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, text: formatDateVN(s['NGÀY BẮT ĐẦU']), font: WORD_FONT, size: 20 })] }),
+                    new TableCell({ verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${calculateAttended(s)}`, bold: true, color: "2563eb", font: WORD_FONT, size: 20 })] })] }),
+                    new TableCell({ verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, text: s['SỐ ĐIỆN THOẠI 1'], font: WORD_FONT, size: 20 })] }),
+                    new TableCell({ verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: isDebt ? unpaid : '', color: isDebt ? "dc2626" : "000000", font: WORD_FONT, size: 18 })] })] }),
+                  ],
+                });
+              }),
+            ],
+          }));
+        }
+      }
+
+      // Add Signature
+      children.push(new Paragraph({ spacing: { before: 800 } }));
+      children.push(new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        borders: { top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE }, insideHorizontal: { style: BorderStyle.NONE }, insideVertical: { style: BorderStyle.NONE } },
+        rows: [
+          new TableRow({
+            children: [
+              new TableCell({ children: [] }),
+              new TableCell({
+                children: [
+                  new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "NGƯỜI LẬP BÁO CÁO", bold: true, font: WORD_FONT, size: WORD_SIZE })] }),
+                  new Paragraph({ spacing: { before: 1200 }, alignment: AlignmentType.CENTER, children: [new TextRun({ text: "LÊ HOÀ HIỆP", bold: true, font: WORD_FONT, size: 32 })] }),
+                ],
+              }),
+            ],
+          }),
+        ],
+      }));
+
+      const doc = new Document({
+        sections: [{
+          properties: {},
+          children: children,
+        }],
+      });
+
+      const blob = await Packer.toBlob(doc);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Bao_Cao_Nhom_T${currentMonth}.docx`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert("Lỗi khi tạo file Word.");
     } finally {
       setIsExporting(false);
     }
@@ -308,9 +524,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
         unpaidMonths: studentDetailStats.unpaidLabels
       });
 
-      let currentY = 15;
-
-      // Tính toán thông tin cho bảng chi tiết
+      let currentY = PDF_MARGIN;
       const detailedAbsences = studentDetailStats.absenceDates.map(d => formatDateVN(d)).join(', ') || 'Không vắng';
       const detailedPaidMonths = studentDetailStats.paidMonths.join(', ') || 'Chưa đóng';
       const periodStr = `Từ ${formatDateVN(selectedStudent['NGÀY BẮT ĐẦU'])} đến ${today.toLocaleDateString('vi-VN')}`;
@@ -370,52 +584,19 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
       `, currentY);
 
       if (chartRef.current) {
-        const chartCaptureContainer = document.createElement('div');
-        chartCaptureContainer.style.width = '1000px';
-        chartCaptureContainer.style.padding = '30px 50px';
-        chartCaptureContainer.style.backgroundColor = '#ffffff';
-        chartCaptureContainer.style.fontFamily = '"Times New Roman", Times, serif';
-        chartCaptureContainer.style.position = 'fixed';
-        chartCaptureContainer.style.left = '-9999px';
-        
-        chartCaptureContainer.innerHTML = `
-          <h3 style="font-size:16pt; font-weight:bold; color:#1e3a8a; margin-bottom:20px; border-left:8px solid #1e3a8a; padding-left:15px; text-transform:uppercase;">BIỂU ĐỒ DIỄN BIẾN CHUYÊN CẦN (12 THÁNG GẦN NHẤT):</h3>
-          <div id="chart-image-target" style="width: 100%; height: 400px; border: 1px solid #eee; border-radius: 10px; padding: 10px;"></div>
-        `;
-        document.body.appendChild(chartCaptureContainer);
-
-        const originalChartCanvas = await html2canvas(chartRef.current, { 
-          scale: 4, 
-          useCORS: true,
-          logging: false 
-        });
-        const chartImgData = originalChartCanvas.toDataURL('image/png');
-        
-        const target = chartCaptureContainer.querySelector('#chart-image-target') as HTMLElement;
-        const img = document.createElement('img');
-        img.src = chartImgData;
-        img.style.width = '100%';
-        target.appendChild(img);
-
-        const finalCanvas = await html2canvas(chartCaptureContainer, { 
-          scale: 4, 
-          useCORS: true, 
-          logging: false 
-        });
-        const finalImgData = finalCanvas.toDataURL('image/jpeg', 1.0);
-        
+        const originalChartCanvas = await html2canvas(chartRef.current, { scale: 4, useCORS: true, logging: false });
+        const chartImgData = originalChartCanvas.toDataURL('image/jpeg', 1.0);
         const pdfWidth = doc.internal.pageSize.getWidth();
-        const margin = 15;
+        const margin = PDF_MARGIN;
         const finalImgWidth = pdfWidth - (margin * 2);
-        const finalImgHeight = (finalCanvas.height * finalImgWidth) / finalCanvas.width;
+        const finalImgHeight = (originalChartCanvas.height * finalImgWidth) / originalChartCanvas.width;
 
-        if (currentY + finalImgHeight > doc.internal.pageSize.getHeight() - 20) {
+        if (currentY + finalImgHeight > doc.internal.pageSize.getHeight() - margin) {
           doc.addPage();
-          currentY = 15;
+          currentY = PDF_MARGIN;
         }
 
-        doc.addImage(finalImgData, 'JPEG', margin, currentY, finalImgWidth, finalImgHeight, undefined, 'FAST');
-        document.body.removeChild(chartCaptureContainer);
+        doc.addImage(chartImgData, 'JPEG', margin, currentY, finalImgWidth, finalImgHeight, undefined, 'FAST');
         currentY += finalImgHeight + 15;
       }
 
@@ -438,7 +619,233 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
       doc.save(`Phieu_Hoc_Tap_${selectedStudent['HỌ TÊN HS']}_HD.pdf`);
     } catch (err) {
       console.error(err);
-      alert("Lỗi khi tạo phiếu học tập sắc nét cao.");
+      alert("Lỗi khi tạo phiếu học tập PDF.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const exportStudentReportWord = async () => {
+    if (!selectedStudent || !studentDetailStats) return;
+    setIsExporting(true);
+    try {
+      const aiComment = await geminiService.generateReportContent('student', {
+        name: selectedStudent['HỌ TÊN HS'],
+        attended: studentDetailStats.attendedCount,
+        absences: studentDetailStats.absencesCount,
+        unpaidMonths: studentDetailStats.unpaidLabels
+      });
+
+      let chartBase64 = '';
+      if (chartRef.current) {
+        const canvas = await html2canvas(chartRef.current, { scale: 2, useCORS: true, logging: false });
+        chartBase64 = canvas.toDataURL('image/png').split(',')[1];
+      }
+
+      const doc = new Document({
+        sections: [{
+          properties: {},
+          children: [
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              children: [
+                new TextRun({
+                  text: "PHIẾU THEO DÕI HỌC TẬP",
+                  bold: true,
+                  size: 36,
+                  font: WORD_FONT,
+                  color: "2563eb",
+                }),
+              ],
+              spacing: { after: 400 },
+            }),
+
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              borders: {
+                top: { style: BorderStyle.THICK, size: 24, color: "2563eb" },
+                bottom: { style: BorderStyle.THICK, size: 24, color: "2563eb" },
+                left: { style: BorderStyle.NONE },
+                right: { style: BorderStyle.NONE },
+                insideHorizontal: { style: BorderStyle.NONE },
+              },
+              rows: [
+                new TableRow({
+                  children: [
+                    new TableCell({
+                      children: [
+                        new Paragraph({
+                          children: [
+                            new TextRun({ text: "Họ và tên: ", bold: true, font: WORD_FONT, size: WORD_SIZE }),
+                            new TextRun({ text: selectedStudent['HỌ TÊN HS'], bold: true, font: WORD_FONT, size: 32, color: "1e3a8a" }),
+                          ],
+                        }),
+                        new Paragraph({
+                          children: [
+                            new TextRun({ text: `Lớp đào tạo: ${selectedStudent['TÊN LỚP']} (Nhóm ${selectedStudent['KHỐI']})`, font: WORD_FONT, size: WORD_SIZE }),
+                          ],
+                        }),
+                      ],
+                      width: { size: 60, type: WidthType.PERCENTAGE },
+                    }),
+                    new TableCell({
+                      children: [
+                        new Paragraph({
+                          alignment: AlignmentType.RIGHT,
+                          children: [
+                            new TextRun({ text: `Ngày tham gia: ${formatDateVN(selectedStudent['NGÀY BẮT ĐẦU'])}`, font: WORD_FONT, size: WORD_SIZE }),
+                          ],
+                        }),
+                        new Paragraph({
+                          alignment: AlignmentType.RIGHT,
+                          children: [
+                            new TextRun({ text: `Ngày in phiếu: ${today.toLocaleDateString('vi-VN')}`, font: WORD_FONT, size: WORD_SIZE }),
+                          ],
+                        }),
+                      ],
+                      width: { size: 40, type: WidthType.PERCENTAGE },
+                    }),
+                  ],
+                }),
+              ],
+            }),
+
+            new Paragraph({ spacing: { before: 400 } }),
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              rows: [
+                new TableRow({
+                  children: [
+                    new TableCell({
+                      shading: { fill: "f0f9ff" },
+                      margins: { top: 200, bottom: 200, left: 200, right: 200 },
+                      children: [
+                        new Paragraph({
+                          children: [
+                            new TextRun({ text: "LỜI NHẮN TỪ THẦY / CÔ:", bold: true, color: "0369a1", font: WORD_FONT, size: WORD_SIZE }),
+                          ],
+                          spacing: { after: 200 },
+                        }),
+                        new Paragraph({
+                          alignment: AlignmentType.JUSTIFY,
+                          children: [
+                            new TextRun({ text: `"${aiComment}"`, italics: true, font: WORD_FONT, size: WORD_SIZE }),
+                          ],
+                        }),
+                      ],
+                    }),
+                  ],
+                }),
+              ],
+            }),
+
+            new Paragraph({
+              spacing: { before: 400, after: 200 },
+              children: [
+                new TextRun({ text: "KẾT QUẢ CHUYÊN CẦN & HỌC PHÍ:", bold: true, font: WORD_FONT, size: 32, color: "1e3a8a" }),
+              ],
+            }),
+
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              rows: [
+                new TableRow({
+                  children: [
+                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "TIÊU CHÍ", bold: true, color: "ffffff", font: WORD_FONT, size: WORD_SIZE })] })], shading: { fill: "2563eb" } }),
+                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "KẾT QUẢ", bold: true, color: "ffffff", font: WORD_FONT, size: WORD_SIZE })] })], shading: { fill: "2563eb" } }),
+                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "CHI TIẾT", bold: true, color: "ffffff", font: WORD_FONT, size: WORD_SIZE })] })], shading: { fill: "2563eb" } }),
+                  ],
+                }),
+                new TableRow({
+                  children: [
+                    new TableCell({ children: [new Paragraph({ text: "Số buổi học thực tế", font: WORD_FONT, size: WORD_SIZE })] }),
+                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${studentDetailStats.attendedCount} buổi`, bold: true, font: WORD_FONT, size: WORD_SIZE })] })] }),
+                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, text: `Từ ${formatDateVN(selectedStudent['NGÀY BẮT ĐẦU'])}`, font: WORD_FONT, size: WORD_SIZE })] }),
+                  ],
+                }),
+                new TableRow({
+                  children: [
+                    new TableCell({ children: [new Paragraph({ text: "Số buổi vắng mặt", font: WORD_FONT, size: WORD_SIZE })] }),
+                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${studentDetailStats.absencesCount} buổi`, bold: true, color: "dc2626", font: WORD_FONT, size: WORD_SIZE })] })] }),
+                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, text: studentDetailStats.absenceDates.map(d => formatDateVN(d)).join(', ') || 'Không vắng', font: WORD_FONT, size: WORD_SIZE })] }),
+                  ],
+                }),
+                new TableRow({
+                  children: [
+                    new TableCell({ children: [new Paragraph({ text: "Tháng đã đóng phí", font: WORD_FONT, size: WORD_SIZE })] }),
+                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${studentDetailStats.paidCount} tháng`, bold: true, font: WORD_FONT, size: WORD_SIZE })] })] }),
+                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, text: studentDetailStats.paidMonths.join(', ') || 'Chưa đóng', font: WORD_FONT, size: WORD_SIZE })] }),
+                  ],
+                }),
+                new TableRow({
+                  children: [
+                    new TableCell({ children: [new Paragraph({ text: "Tháng còn nợ phí", font: WORD_FONT, size: WORD_SIZE })] }),
+                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${studentDetailStats.unpaidCount} tháng`, bold: true, color: "dc2626", font: WORD_FONT, size: WORD_SIZE })] })] }),
+                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: studentDetailStats.unpaidLabels || 'Hoàn thành ✅', bold: true, font: WORD_FONT, size: WORD_SIZE })] })] }),
+                  ],
+                }),
+              ],
+            }),
+
+            new Paragraph({
+              spacing: { before: 400, after: 200 },
+              children: [
+                new TextRun({ text: "BIỂU ĐỒ CHUYÊN CẦN:", bold: true, font: WORD_FONT, size: 28, color: "1e3a8a" }),
+              ],
+            }),
+            ...(chartBase64 ? [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [
+                  new ImageRun({
+                    data: Uint8Array.from(atob(chartBase64), c => c.charCodeAt(0)),
+                    transformation: { width: 500, height: 250 },
+                  }),
+                ],
+              })
+            ] : []),
+
+            new Paragraph({ spacing: { before: 600 } }),
+            new Table({
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              borders: {
+                top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE },
+                insideHorizontal: { style: BorderStyle.NONE }, insideVertical: { style: BorderStyle.NONE },
+              },
+              rows: [
+                new TableRow({
+                  children: [
+                    new TableCell({
+                      children: [
+                        new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "XÁC NHẬN CỦA PHỤ HUYNH", bold: true, font: WORD_FONT, size: WORD_SIZE })] }),
+                        new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "(Ký và ghi rõ họ tên)", italics: true, font: WORD_FONT, size: 22 })] }),
+                      ],
+                    }),
+                    new TableCell({
+                      children: [
+                        new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "GIÁO VIÊN CHỦ NHIỆM", bold: true, font: WORD_FONT, size: WORD_SIZE })] }),
+                        new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "(Đã phê duyệt điện tử)", italics: true, font: WORD_FONT, size: 22 })] }),
+                        new Paragraph({ spacing: { before: 800 }, alignment: AlignmentType.CENTER, children: [new TextRun({ text: "LÊ HOÀ HIỆP", bold: true, font: WORD_FONT, size: 32 })] }),
+                      ],
+                    }),
+                  ],
+                }),
+              ],
+            }),
+          ],
+        }],
+      });
+
+      const blob = await Packer.toBlob(doc);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Phieu_Hoc_Tap_${selectedStudent['HỌ TÊN HS']}.docx`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert("Lỗi khi tạo file Word.");
     } finally {
       setIsExporting(false);
     }
@@ -452,18 +859,22 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
             <span className="w-2 h-8 bg-blue-600 rounded-full"></span>
             Thống kê nhóm (T{currentMonth}/{currentYear})
           </h2>
-          <button 
-            onClick={exportClassReport}
-            disabled={isExporting}
-            className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-3 rounded-xl font-black text-sm shadow-lg flex items-center gap-2 transition-all active:scale-95 disabled:bg-gray-400"
-          >
-            {isExporting ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                ĐANG XỬ LÝ HD...
-              </>
-            ) : "XUẤT BÁO CÁO NHÓM (PDF HD)"}
-          </button>
+          <div className="flex gap-3">
+            <button 
+              onClick={exportClassReport}
+              disabled={isExporting}
+              className="bg-blue-700 hover:bg-blue-800 text-white px-5 py-3 rounded-xl font-black text-[11px] shadow-lg flex items-center gap-2 transition-all active:scale-95 disabled:bg-gray-400"
+            >
+              PDF HD
+            </button>
+            <button 
+              onClick={exportClassReportWord}
+              disabled={isExporting}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-3 rounded-xl font-black text-[11px] shadow-lg flex items-center gap-2 transition-all active:scale-95 disabled:bg-gray-400"
+            >
+              Word
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -486,7 +897,6 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
         </div>
 
         <div className="mt-8 space-y-8">
-          {/* Danh sách học sinh ĐÃ ĐÓNG */}
           <div>
             <h3 className="text-[11px] font-black text-emerald-600 uppercase mb-3 tracking-wider flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
@@ -502,7 +912,6 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
             </div>
           </div>
 
-          {/* Danh sách học sinh CHUẨN BỊ ĐÓNG */}
           <div>
             <h3 className="text-[11px] font-black text-red-500 uppercase mb-3 tracking-wider flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
@@ -518,7 +927,6 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
             </div>
           </div>
 
-          {/* Danh sách học sinh NỢ PHÍ CŨ */}
           <div>
             <h3 className="text-[11px] font-black text-orange-500 uppercase mb-3 tracking-wider flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
@@ -548,7 +956,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="md:col-span-3">
+          <div className="md:col-span-2">
             <select 
               className="w-full p-4 border border-gray-200 rounded-xl font-bold text-gray-700 bg-slate-50 outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
               value={selectedStudentName}
@@ -563,11 +971,20 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
           <button
             onClick={exportStudentReport}
             disabled={!selectedStudent || isExporting}
-            className={`flex items-center justify-center gap-2 px-6 py-4 rounded-xl font-black transition-all shadow-lg active:scale-95 ${
+            className={`flex items-center justify-center gap-2 px-4 py-4 rounded-xl font-black transition-all shadow-lg active:scale-95 ${
               selectedStudent && !isExporting ? 'bg-blue-700 text-white hover:bg-blue-800' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
             }`}
           >
-            {isExporting ? "ĐANG TẠO PDF..." : "XUẤT PHIẾU HD (PDF)"}
+            PDF HD
+          </button>
+          <button
+            onClick={exportStudentReportWord}
+            disabled={!selectedStudent || isExporting}
+            className={`flex items-center justify-center gap-2 px-4 py-4 rounded-xl font-black transition-all shadow-lg active:scale-95 ${
+              selectedStudent && !isExporting ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+            }`}
+          >
+            Word
           </button>
         </div>
 
@@ -592,7 +1009,6 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
                         {formatDateVN(d).split('/')[0]}/{formatDateVN(d).split('/')[1]}
                       </span>
                     ))}
-                    {studentDetailStats.absenceDates.length === 0 && <span className="text-[8px] text-gray-300 italic">Không vắng buổi nào</span>}
                   </div>
                 </div>
                 <div className="bg-slate-50 p-5 rounded-2xl border border-gray-100">
