@@ -28,6 +28,10 @@ const App: React.FC = () => {
   // Filter State for List Tab
   const [listFilterGrade, setListFilterGrade] = useState<string>('');
 
+  // Filter State for Update Tab
+  const [updateSearchTerm, setUpdateSearchTerm] = useState('');
+  const [updateFilterGrade, setUpdateFilterGrade] = useState('');
+
   // Sync API Key to global process.env for Gemini SDK
   useEffect(() => {
     const win = window as any;
@@ -143,6 +147,14 @@ const App: React.FC = () => {
     return sortedStudents.filter(s => String(s['KHỐI']) === listFilterGrade);
   }, [sortedStudents, listFilterGrade]);
 
+  const filteredForUpdate = useMemo(() => {
+    return sortedStudents.filter(s => {
+      const matchGrade = !updateFilterGrade || String(s['KHỐI']) === updateFilterGrade;
+      const matchSearch = !updateSearchTerm || s['HỌ TÊN HS'].toLowerCase().includes(updateSearchTerm.toLowerCase());
+      return matchGrade && matchSearch;
+    });
+  }, [sortedStudents, updateFilterGrade, updateSearchTerm]);
+
   const gradeCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     students.forEach(s => {
@@ -156,7 +168,11 @@ const App: React.FC = () => {
 
   // Lấy danh sách các nhóm thực tế có học sinh
   const activeGrades = useMemo(() => {
-    return Object.keys(gradeCounts).sort((a, b) => parseInt(a) - parseInt(b));
+    return Object.keys(gradeCounts).sort((a, b) => {
+      if (isNaN(parseInt(a)) && !isNaN(parseInt(b))) return 1;
+      if (!isNaN(parseInt(a)) && isNaN(parseInt(b))) return -1;
+      return parseInt(a) - parseInt(b) || a.localeCompare(b);
+    });
   }, [gradeCounts]);
 
   if (!isLoggedIn) {
@@ -463,25 +479,56 @@ const App: React.FC = () => {
         {activeTab === 'update' && (
           <div className="max-w-5xl mx-auto space-y-8">
             <div className="bg-white p-8 rounded-2xl shadow-xl border border-blue-50">
-               <h3 className="font-black text-blue-900 mb-6 flex items-center gap-3">
+               <h3 className="font-black text-blue-900 mb-6 flex items-center gap-3 uppercase tracking-tight">
                  <div className="p-2 bg-blue-100 rounded-lg">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                   </svg>
                  </div>
                  TRÌNH QUẢN LÝ CẬP NHẬT
                </h3>
+               
+               {/* Search and Filters for Update Tab */}
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                 <div className="relative">
+                   <span className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                     <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                     </svg>
+                   </span>
+                   <input 
+                     type="text"
+                     placeholder="Tìm tên học sinh cần sửa..."
+                     value={updateSearchTerm}
+                     onChange={(e) => setUpdateSearchTerm(e.target.value)}
+                     className="w-full pl-11 pr-4 py-4 border border-gray-100 bg-slate-50/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm font-bold text-sm text-gray-700 transition-all"
+                   />
+                 </div>
+                 <div className="relative">
+                   <select 
+                     value={updateFilterGrade}
+                     onChange={(e) => setUpdateFilterGrade(e.target.value)}
+                     className="w-full px-4 py-4 border border-gray-100 bg-slate-50/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm font-black text-[11px] text-blue-800 uppercase tracking-widest transition-all"
+                   >
+                     <option value="">Lọc theo Nhóm</option>
+                     {activeGrades.map((grade) => (
+                       <option key={grade} value={grade}>Nhóm {grade}</option>
+                     ))}
+                   </select>
+                 </div>
+               </div>
+
                <div className="flex flex-col md:flex-row gap-4">
                  <select 
-                    className="flex-grow p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm font-bold text-gray-700"
+                    className="flex-grow p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-md font-bold text-gray-700 bg-white"
                     onChange={(e) => {
                       setTempSelection(e.target.value);
-                      setSelectedForEdit(null); // Reset form visibility
+                      setSelectedForEdit(null); // Reset form visibility when selection changes
                     }}
                     value={tempSelection}
                  >
-                    <option value="">-- Chọn học sinh cần chỉnh sửa --</option>
-                    {sortedStudents.map((s, idx) => (
+                    <option value="">-- Kết quả tìm thấy: {filteredForUpdate.length} học sinh --</option>
+                    {filteredForUpdate.map((s, idx) => (
                       <option key={idx} value={s['HỌ TÊN HS']}>
                         {s['HỌ TÊN HS']} (Nhóm {s['KHỐI']} - Lớp {s['TÊN LỚP']})
                       </option>
