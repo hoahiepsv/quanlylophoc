@@ -23,6 +23,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
   });
 
   const [isTutoring, setIsTutoring] = useState(false);
+  const [isDroppedOut, setIsDroppedOut] = useState(false);
 
   useEffect(() => {
     if (initialData) {
@@ -31,13 +32,18 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
         sanitized['NGÀY BẮT ĐẦU'] = sanitized['NGÀY BẮT ĐẦU'].split(/[T ]/)[0];
       }
       
-      // Xử lý tách nhãn "Kèm Riêng" từ dữ liệu KHỐI
       const khoiValue = String(sanitized['KHỐI'] || '');
-      if (khoiValue.includes(' - Kèm Riêng')) {
+      if (khoiValue === 'Đã thôi học') {
+        setIsDroppedOut(true);
+        setIsTutoring(false);
+        sanitized['KHỐI'] = '';
+      } else if (khoiValue === 'Kèm riêng' || khoiValue === 'Nhóm kèm riêng') {
+        setIsDroppedOut(false);
         setIsTutoring(true);
-        sanitized['KHỐI'] = khoiValue.replace(' - Kèm Riêng', '');
+        sanitized['KHỐI'] = '';
       } else {
         setIsTutoring(false);
+        setIsDroppedOut(false);
       }
 
       setFormData(prev => ({ ...prev, ...sanitized }));
@@ -74,6 +80,11 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
   const handleInsertTeacherSchedule = () => {
     const selectedKhoi = formData['KHỐI'];
     const startDate = formData['NGÀY BẮT ĐẦU'];
+
+    if (isDroppedOut || isTutoring) {
+      alert("Học sinh kèm riêng hoặc đã thôi học không có lịch dạy cố định theo nhóm!");
+      return;
+    }
 
     if (!selectedKhoi) {
       alert("Vui lòng chọn NHÓM trước khi chèn lịch dạy!");
@@ -128,10 +139,11 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Tạo bản sao dữ liệu để điều chỉnh giá trị KHỐI trước khi gửi
     const submissionData = { ...formData };
-    if (isTutoring && submissionData['KHỐI']) {
-      submissionData['KHỐI'] = `${submissionData['KHỐI']} - Kèm Riêng`;
+    if (isDroppedOut) {
+      submissionData['KHỐI'] = "Đã thôi học";
+    } else if (isTutoring) {
+      submissionData['KHỐI'] = "Kèm riêng";
     }
     
     onSubmit(submissionData);
@@ -218,9 +230,10 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
                     name="KHỐI" 
                     value={formData['KHỐI']} 
                     onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
+                    disabled={isDroppedOut || isTutoring}
+                    className={`w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium ${(isDroppedOut || isTutoring) ? 'bg-gray-100 text-gray-400 opacity-50' : ''}`}
                   >
-                    <option value="">Chọn nhóm</option>
+                    <option value="">{isDroppedOut ? 'Đã thôi học' : (isTutoring ? 'Kèm riêng' : 'Chọn nhóm')}</option>
                     {[...Array(12)].map((_, i) => (
                       <option key={i+1} value={i+1}>Nhóm {i+1}</option>
                     ))}
@@ -238,22 +251,45 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
                 </div>
               </div>
 
-              {/* Ô stick Kèm Riêng */}
-              <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 flex items-center justify-between">
-                <div>
-                  <label className="text-xs font-black text-amber-800 uppercase block">Chế độ học tập</label>
-                  <span className="text-[10px] text-amber-600 font-medium">Chọn nếu học sinh học kèm riêng 1:1</span>
+              {/* Ô stick Trạng thái đặc biệt */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 flex items-center justify-between">
+                  <div>
+                    <label className="text-[10px] font-black text-amber-800 uppercase block">Học tập</label>
+                    <span className="text-[8px] text-amber-600 font-medium leading-none">Kèm riêng</span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={isTutoring}
+                      onChange={(e) => {
+                        setIsTutoring(e.target.checked);
+                        if (e.target.checked) setIsDroppedOut(false);
+                      }}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-600"></div>
+                  </label>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input 
-                    type="checkbox" 
-                    checked={isTutoring}
-                    onChange={(e) => setIsTutoring(e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
-                  <span className="ml-3 text-xs font-black text-amber-900 uppercase">KÈM RIÊNG</span>
-                </label>
+
+                <div className="bg-red-50 p-4 rounded-2xl border border-red-100 flex items-center justify-between">
+                  <div>
+                    <label className="text-[10px] font-black text-red-800 uppercase block">Trạng thái</label>
+                    <span className="text-[8px] text-red-600 font-medium leading-none">HS thôi học</span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={isDroppedOut}
+                      onChange={(e) => {
+                        setIsDroppedOut(e.target.checked);
+                        if (e.target.checked) setIsTutoring(false);
+                      }}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-red-600"></div>
+                  </label>
+                </div>
               </div>
 
               <div>

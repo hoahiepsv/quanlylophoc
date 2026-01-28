@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Student } from '../types';
 import { apiService } from '../services/apiService';
 
@@ -9,11 +9,23 @@ interface AttendanceProps {
 }
 
 const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
+  // selectedIds lưu trữ rowIndex của những học sinh ĐANG ĐƯỢC CHỌN LÀ VẮNG MẶT
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState(false);
   const [filterKhoi, setFilterKhoi] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
+
+  // Đồng bộ selectedIds với dữ liệu từ database khi ngày hoặc danh sách học sinh thay đổi
+  useEffect(() => {
+    const currentAbsences = new Set<number>();
+    students.forEach(s => {
+      if (s.rowIndex && (s['ĐIỂM DANH HS'] || '').includes(attendanceDate)) {
+        currentAbsences.add(s.rowIndex);
+      }
+    });
+    setSelectedIds(currentAbsences);
+  }, [attendanceDate, students]);
 
   const dateDisplay = useMemo(() => {
     const d = new Date(attendanceDate);
@@ -21,7 +33,8 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
   }, [attendanceDate]);
 
   const systemStats = useMemo(() => {
-    const allAbsent = students.filter(s => (s['ĐIỂM DANH HS'] || '').includes(attendanceDate)).length;
+    // Thống kê dựa trên trạng thái hiện tại trong selectedIds (chưa lưu hoặc đã lưu)
+    const allAbsent = Array.from(selectedIds).length;
     const allStudents = students.length;
     
     let gradeAbsent = 0;
@@ -30,14 +43,14 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
     if (filterKhoi) {
       const gradeList = students.filter(s => String(s['KHỐI']) === filterKhoi);
       gradeTotal = gradeList.length;
-      gradeAbsent = gradeList.filter(s => (s['ĐIỂM DANH HS'] || '').includes(attendanceDate)).length;
+      gradeAbsent = gradeList.filter(s => selectedIds.has(s.rowIndex!)).length;
     } else {
       gradeTotal = allStudents;
       gradeAbsent = allAbsent;
     }
 
     return { allAbsent, allStudents, gradeAbsent, gradeTotal };
-  }, [students, attendanceDate, filterKhoi]);
+  }, [students, selectedIds, filterKhoi]);
 
   const filteredStudents = useMemo(() => {
     return students.filter(s => {
@@ -58,35 +71,54 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
 
   const toggleStudent = (rowIndex: number) => {
     const newSet = new Set(selectedIds);
-    if (newSet.has(rowIndex)) newSet.delete(rowIndex);
-    else newSet.add(rowIndex);
+    if (newSet.has(rowIndex)) {
+      newSet.delete(rowIndex);
+    } else {
+      newSet.add(rowIndex);
+    }
     setSelectedIds(newSet);
   };
 
   const handleSaveAttendance = async () => {
-    if (selectedIds.size === 0) {
-      alert("Vui lòng chọn ít nhất một học sinh vắng mặt!");
+    // Tìm những học sinh có thay đổi so với database
+    const updates = students.map(student => {
+      const isNowAbsent = selectedIds.has(student.rowIndex!);
+      const wasAbsentInDB = (student['ĐIỂM DANH HS'] || '').includes(attendanceDate);
+      
+      if (isNowAbsent === wasAbsentInDB) return null; // Không có thay đổi
+
+      const currentAbsencesList = (student['ĐIỂM DANH HS'] || '').split(' ').filter(d => d);
+      let newAbsencesStr;
+      
+      if (isNowAbsent) {
+        // Thêm ngày vắng mới
+        newAbsencesStr = [...currentAbsencesList, attendanceDate].sort().join(' ');
+      } else {
+        // Xóa ngày vắng
+        newAbsencesStr = currentAbsencesList.filter(d => d !== attendanceDate).join(' ');
+      }
+      
+      return {
+        rowIndex: student.rowIndex,
+        data: { ...student, 'ĐIỂM DANH HS': newAbsencesStr }
+      };
+    }).filter(item => item !== null);
+
+    if (updates.length === 0) {
+      alert("Không có thay đổi nào để lưu!");
       return;
     }
 
-    if (!confirm(`Xác nhận ghi nhận vắng mặt cho ${selectedIds.size} học sinh vào ngày ${dateDisplay}?`)) return;
+    if (!confirm(`Xác nhận cập nhật điểm danh cho ${updates.length} học sinh có thay đổi vào ngày ${dateDisplay}?`)) return;
 
     setSaving(true);
     try {
-      const updatePromises = Array.from(selectedIds).map((rowIndex: number) => {
-        const student = students.find(s => s.rowIndex === rowIndex);
-        if (!student) return Promise.resolve();
-
-        const currentAbsences = (student['ĐIỂM DANH HS'] || '').split(' ').filter(d => d);
-        if (currentAbsences.includes(attendanceDate)) return Promise.resolve();
-
-        const newAbsences = [...currentAbsences, attendanceDate].sort().join(' ');
-        return apiService.saveStudent('updateData', { ...student, 'ĐIỂM DANH HS': newAbsences }, rowIndex);
-      });
+      const updatePromises = updates.map(update => 
+        apiService.saveStudent('updateData', update!.data, update!.rowIndex)
+      );
 
       await Promise.all(updatePromises);
       alert("Đã cập nhật điểm danh thành công!");
-      setSelectedIds(new Set());
       await onRefresh();
     } catch (error: any) {
       alert("Lỗi khi lưu điểm danh: " + error.message);
@@ -97,13 +129,13 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
 
   return (
     <div className="space-y-4 animate-fadeIn pb-24 md:pb-8">
-      {/* Header gọn gàng */}
+      {/* Header */}
       <div className="bg-white p-4 rounded-2xl shadow-sm border border-blue-50">
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-black text-blue-900 uppercase flex items-center gap-2">
               <div className="w-1 h-5 bg-red-500 rounded-full"></div>
-              Ghi nhận vắng
+              Điểm danh vắng mặt
             </h2>
             <input 
               type="date" 
@@ -136,7 +168,7 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
           </span>
           <input 
             type="text" 
-            placeholder="Tìm tên..."
+            placeholder="Tìm tên học sinh..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-8 pr-4 py-2.5 bg-white border border-gray-100 rounded-xl focus:ring-1 focus:ring-blue-500 outline-none text-xs font-bold shadow-sm"
@@ -144,10 +176,7 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
         </div>
         <select 
           value={filterKhoi}
-          onChange={(e) => {
-            setFilterKhoi(e.target.value);
-            setSelectedIds(new Set());
-          }}
+          onChange={(e) => setFilterKhoi(e.target.value)}
           className="px-4 py-2.5 bg-white border border-gray-100 rounded-xl font-black text-[10px] text-blue-800 outline-none focus:ring-1 focus:ring-blue-500 shadow-sm uppercase"
         >
           <option value="">Tất cả Nhóm</option>
@@ -157,33 +186,27 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
         </select>
       </div>
 
-      {/* Danh sách học sinh dạng Card Gọn */}
+      {/* Danh sách học sinh */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
         {filteredStudents.map((student) => {
           const isSelected = selectedIds.has(student.rowIndex!);
-          const isAlreadyAbsent = (student['ĐIỂM DANH HS'] || '').includes(attendanceDate);
+          const wasAbsentInDB = (student['ĐIỂM DANH HS'] || '').includes(attendanceDate);
 
           return (
             <div 
               key={student.rowIndex}
-              onClick={() => !isAlreadyAbsent && toggleStudent(student.rowIndex!)}
+              onClick={() => toggleStudent(student.rowIndex!)}
               className={`relative p-3 rounded-xl border-2 transition-all cursor-pointer select-none flex items-center gap-3 ${
-                isAlreadyAbsent 
-                ? 'bg-slate-50 border-slate-100 opacity-60 grayscale' 
-                : isSelected 
+                isSelected 
                 ? 'bg-red-50 border-red-500 shadow-sm ring-2 ring-red-100' 
                 : 'bg-white border-white hover:border-blue-100 shadow-sm'
               }`}
             >
               {/* Icon Trạng thái */}
               <div className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center ${
-                isAlreadyAbsent ? 'bg-slate-200 text-slate-500' : isSelected ? 'bg-red-600 text-white' : 'bg-blue-100 text-blue-600'
+                isSelected ? 'bg-red-600 text-white' : 'bg-blue-100 text-blue-600'
               }`}>
-                {isAlreadyAbsent ? (
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                  </svg>
-                ) : isSelected ? (
+                {isSelected ? (
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
@@ -207,9 +230,15 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
                 </div>
               </div>
 
-              {/* Badge Vắng mặt */}
-              {isAlreadyAbsent && (
-                <span className="text-[8px] font-black text-slate-400 uppercase bg-slate-100 px-1.5 py-0.5 rounded">Đã vắng</span>
+              {/* Badge Trạng thái Database */}
+              {wasAbsentInDB && !isSelected && (
+                <span className="text-[8px] font-black text-orange-400 uppercase bg-orange-50 px-1.5 py-0.5 rounded border border-orange-100">Bỏ vắng?</span>
+              )}
+              {isSelected && !wasAbsentInDB && (
+                <span className="text-[8px] font-black text-red-500 uppercase bg-white px-1.5 py-0.5 rounded border border-red-200">Mới</span>
+              )}
+              {isSelected && wasAbsentInDB && (
+                <span className="text-[8px] font-black text-red-400 uppercase opacity-50">Đã vắng</span>
               )}
             </div>
           );
@@ -229,11 +258,11 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-xs px-4 z-[60]">
         <button
           onClick={handleSaveAttendance}
-          disabled={saving || selectedIds.size === 0}
+          disabled={saving}
           className={`w-full py-3.5 rounded-2xl font-black shadow-2xl transition-all active:scale-95 flex items-center justify-center gap-3 ${
-            selectedIds.size > 0 && !saving 
-            ? 'bg-red-600 text-white animate-bounce-short' 
-            : 'bg-white text-gray-300 border border-gray-100 pointer-events-none'
+            !saving 
+            ? 'bg-blue-700 text-white animate-bounce-short' 
+            : 'bg-gray-400 text-white cursor-not-allowed'
           }`}
         >
           {saving ? (
@@ -241,9 +270,9 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
           ) : (
             <>
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
               </svg>
-              <span className="text-xs uppercase">XÁC NHẬN VẮNG ({selectedIds.size})</span>
+              <span className="text-xs uppercase">LƯU ĐIỂM DANH ({selectedIds.size})</span>
             </>
           )}
         </button>
