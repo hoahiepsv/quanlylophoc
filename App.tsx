@@ -132,13 +132,43 @@ const App: React.FC = () => {
     }
   };
 
-  // Memoized lists and stats
+  // Sắp xếp danh sách học sinh theo Nhóm/khối và Tên (chữ cuối)
   const sortedStudents = useMemo(() => {
     if (!Array.isArray(students)) return [];
     return [...students].sort((a, b) => {
-      const kA = parseInt(String(a['KHỐI'] || '0'));
-      const kB = parseInt(String(b['KHỐI'] || '0'));
-      return kA - kB;
+      const gradeA = String(a['KHỐI'] || '');
+      const gradeB = String(b['KHỐI'] || '');
+      
+      const numA = parseInt(gradeA);
+      const numB = parseInt(gradeB);
+
+      // 1. Sắp xếp theo Nhóm/Khối
+      if (!isNaN(numA) && !isNaN(numB)) {
+        if (numA !== numB) return numA - numB;
+      } else if (!isNaN(numA)) {
+        return -1;
+      } else if (!isNaN(numB)) {
+        return 1;
+      } else {
+        if (gradeA !== gradeB) {
+          if (gradeA === 'Đã thôi học') return 1;
+          if (gradeB === 'Đã thôi học') return -1;
+          return gradeA.localeCompare(gradeB);
+        }
+      }
+
+      // 2. Nếu cùng nhóm, sắp xếp theo Tên (chữ cuối cùng của họ tên)
+      const nameA = (a['HỌ TÊN HS'] || '').trim();
+      const nameB = (b['HỌ TÊN HS'] || '').trim();
+      const partsA = nameA.split(' ');
+      const partsB = nameB.split(' ');
+      const lastA = partsA[partsA.length - 1] || '';
+      const lastB = partsB[partsB.length - 1] || '';
+
+      if (lastA !== lastB) {
+        return lastA.localeCompare(lastB, 'vi');
+      }
+      return nameA.localeCompare(nameB, 'vi');
     });
   }, [students]);
 
@@ -169,9 +199,14 @@ const App: React.FC = () => {
   // Lấy danh sách các nhóm thực tế có học sinh
   const activeGrades = useMemo(() => {
     return Object.keys(gradeCounts).sort((a, b) => {
-      if (isNaN(parseInt(a)) && !isNaN(parseInt(b))) return 1;
-      if (!isNaN(parseInt(a)) && isNaN(parseInt(b))) return -1;
-      return parseInt(a) - parseInt(b) || a.localeCompare(b);
+      const nA = parseInt(a);
+      const nB = parseInt(b);
+      if (!isNaN(nA) && !isNaN(nB)) return nA - nB;
+      if (!isNaN(nA)) return -1;
+      if (!isNaN(nB)) return 1;
+      if (a === 'Đã thôi học') return 1;
+      if (b === 'Đã thôi học') return -1;
+      return a.localeCompare(b);
     });
   }, [gradeCounts]);
 
