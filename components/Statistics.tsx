@@ -18,7 +18,6 @@ import {
   BorderStyle,
   VerticalAlign,
   ImageRun,
-  HeightRule
 } from 'docx';
 
 interface StatisticsProps {
@@ -27,8 +26,13 @@ interface StatisticsProps {
 
 const Statistics: React.FC<StatisticsProps> = ({ students }) => {
   const [selectedStudentName, setSelectedStudentName] = useState<string>('');
+  const [reportSearchTerm, setReportSearchTerm] = useState('');
+  const [reportFilterGrade, setReportFilterGrade] = useState('');
   const [isExporting, setIsExporting] = useState(false);
+  
   const chartRef = useRef<HTMLDivElement>(null);
+  const studentReportRef = useRef<HTMLDivElement>(null);
+  const jpegTemplateRef = useRef<HTMLDivElement>(null);
 
   const today = useMemo(() => new Date(), []);
   const currentMonth = today.getMonth() + 1;
@@ -97,6 +101,30 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
 
     return { paidThisMonth, unpaidThisMonth, debtors };
   }, [students, currentMonthTag, today]);
+
+  const filteredStudentsForReport = useMemo(() => {
+    return students.filter(s => {
+      const matchGrade = !reportFilterGrade || String(s['KHỐI']) === reportFilterGrade;
+      const matchSearch = !reportSearchTerm || (s['HỌ TÊN HS'] || '').toLowerCase().includes(reportSearchTerm.toLowerCase());
+      return matchGrade && matchSearch;
+    });
+  }, [students, reportFilterGrade, reportSearchTerm]);
+
+  const activeGradesForFilter = useMemo(() => {
+    const grades = new Set<string>();
+    students.forEach(s => {
+      const k = String(s['KHỐI']);
+      if (k && k !== 'undefined' && k !== 'null') grades.add(k);
+    });
+    return Array.from(grades).sort((a, b) => {
+      const nA = parseInt(a);
+      const nB = parseInt(b);
+      if (!isNaN(nA) && !isNaN(nB)) return nA - nB;
+      if (!isNaN(nA)) return -1;
+      if (!isNaN(nB)) return 1;
+      return a.localeCompare(b);
+    });
+  }, [students]);
 
   const selectedStudent = useMemo(() => {
     return students.find(s => s['HỌ TÊN HS'] === selectedStudentName);
@@ -419,7 +447,6 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
         }),
       ];
 
-      // Add Appendices
       for (const entry of tableTitles) {
         if (entry.list.length > 0) {
           const isDebt = entry.type === 'debt';
@@ -464,7 +491,6 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
         }
       }
 
-      // Add Signature
       children.push(new Paragraph({ spacing: { before: 800 } }));
       children.push(new Table({
         width: { size: 100, type: WidthType.PERCENTAGE },
@@ -851,8 +877,123 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
     }
   };
 
+  const exportStudentReportJPG = async () => {
+    if (!selectedStudent || !studentDetailStats || !jpegTemplateRef.current) return;
+    setIsExporting(true);
+    try {
+      // Ensure the hidden template is populated
+      const canvas = await html2canvas(jpegTemplateRef.current, {
+        scale: 4, // High quality
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        width: 800, // Fixed width for consistent layout
+      });
+      
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const link = document.createElement('a');
+      link.href = imgData;
+      link.download = `Bao_Cao_${selectedStudent['HỌ TÊN HS']}_${currentMonthTag.replace('/', '_')}.jpg`;
+      link.click();
+    } catch (err) {
+      console.error(err);
+      alert("Lỗi khi tạo hình ảnh báo cáo.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-8 animate-fadeIn">
+      {/* Hidden JPEG Template (Professional Design) */}
+      {selectedStudent && studentDetailStats && (
+        <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+          <div 
+            ref={jpegTemplateRef}
+            style={{ 
+              width: '800px', 
+              padding: '40px', 
+              backgroundColor: '#ffffff', 
+              fontFamily: 'system-ui, -apple-system, sans-serif' 
+            }}
+          >
+            <div style={{ textAlign: 'center', marginBottom: '30px', borderBottom: '4px solid #2563eb', paddingBottom: '15px' }}>
+              <h1 style={{ fontSize: '32px', color: '#1e3a8a', margin: '0', textTransform: 'uppercase', fontWeight: '900' }}>Phiếu Báo Cáo Học Tập</h1>
+              <p style={{ color: '#64748b', fontSize: '16px', marginTop: '5px', fontWeight: 'bold' }}>Học viên: <span style={{ color: '#2563eb' }}>{selectedStudent['HỌ TÊN HS']}</span></p>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '30px' }}>
+              <div style={{ padding: '20px', backgroundColor: '#f8fafc', borderRadius: '15px', border: '1px solid #e2e8f0' }}>
+                <p style={{ fontSize: '12px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', marginBottom: '5px' }}>Thông tin lớp học</p>
+                <p style={{ fontSize: '16px', margin: '0' }}><b>Nhóm:</b> {selectedStudent['KHỐI']}</p>
+                <p style={{ fontSize: '16px', margin: '5px 0' }}><b>Lớp:</b> {selectedStudent['TÊN LỚP']}</p>
+                <p style={{ fontSize: '16px', margin: '0' }}><b>Ngày bắt đầu:</b> {formatDateVN(selectedStudent['NGÀY BẮT ĐẦU'])}</p>
+              </div>
+              <div style={{ padding: '20px', backgroundColor: '#f8fafc', borderRadius: '15px', border: '1px solid #e2e8f0' }}>
+                <p style={{ fontSize: '12px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', marginBottom: '5px' }}>Thời gian báo cáo</p>
+                <p style={{ fontSize: '18px', margin: '0', color: '#1e3a8a' }}><b>Tháng {currentMonth} / {currentYear}</b></p>
+                <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '5px' }}>Ngày xuất: {today.toLocaleDateString('vi-VN')}</p>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '15px', marginBottom: '30px' }}>
+              <div style={{ textAlign: 'center', padding: '15px', background: '#ecfdf5', borderRadius: '12px' }}>
+                <span style={{ display: 'block', fontSize: '10px', color: '#059669', fontWeight: 'bold' }}>ĐÃ HỌC</span>
+                <span style={{ fontSize: '24px', fontWeight: '900', color: '#065f46' }}>{studentDetailStats.attendedCount}</span>
+              </div>
+              <div style={{ textAlign: 'center', padding: '15px', background: '#fef2f2', borderRadius: '12px' }}>
+                <span style={{ display: 'block', fontSize: '10px', color: '#dc2626', fontWeight: 'bold' }}>VẮNG MẶT</span>
+                <span style={{ fontSize: '24px', fontWeight: '900', color: '#991b1b' }}>{studentDetailStats.absencesCount}</span>
+              </div>
+              <div style={{ textAlign: 'center', padding: '15px', background: '#eff6ff', borderRadius: '12px' }}>
+                <span style={{ display: 'block', fontSize: '10px', color: '#2563eb', fontWeight: 'bold' }}>ĐÓNG PHÍ</span>
+                <span style={{ fontSize: '24px', fontWeight: '900', color: '#1e40af' }}>{studentDetailStats.paidCount}</span>
+              </div>
+              <div style={{ textAlign: 'center', padding: '15px', background: '#fff7ed', borderRadius: '12px' }}>
+                <span style={{ display: 'block', fontSize: '10px', color: '#ea580c', fontWeight: 'bold' }}>CHƯA ĐÓNG</span>
+                <span style={{ fontSize: '24px', fontWeight: '900', color: '#9a3412' }}>{studentDetailStats.unpaidCount}</span>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '30px' }}>
+              <p style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e3a8a', marginBottom: '15px', textAlign: 'center', textTransform: 'uppercase' }}>Biểu đồ chuyên cần theo tháng</p>
+              <div style={{ height: '220px', background: '#ffffff', border: '1px solid #f1f5f9', borderRadius: '10px', padding: '10px' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={studentDetailStats.chartData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" tick={{fontSize: 10}} axisLine={false} tickLine={false} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10}} />
+                    <Bar dataKey="count" radius={[4, 4, 0, 0]} barSize={30}>
+                      {studentDetailStats.chartData.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={index === studentDetailStats.chartData.length - 1 ? '#1e3a8a' : '#3b82f6'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '40px', paddingTop: '20px', borderTop: '1px dashed #cbd5e1' }}>
+              <div style={{ textAlign: 'center', width: '40%' }}>
+                <p style={{ fontSize: '14px', fontWeight: 'bold', margin: '0' }}>PHỤ HUYNH XÁC NHẬN</p>
+                <div style={{ height: '60px' }}></div>
+                <p style={{ fontSize: '12px', color: '#94a3b8' }}>(Ký và ghi rõ họ tên)</p>
+              </div>
+              <div style={{ textAlign: 'center', width: '40%' }}>
+                <p style={{ fontSize: '14px', fontWeight: 'bold', margin: '0' }}>GIÁO VIÊN CHỦ NHIỆM</p>
+                <p style={{ fontSize: '16px', fontWeight: 'bold', color: '#1e3a8a', marginTop: '50px', marginBottom: '0' }}>LÊ HOÀ HIỆP</p>
+                <p style={{ fontSize: '11px', color: '#059669', fontWeight: 'bold' }}>✓ Đã phê duyệt điện tử</p>
+              </div>
+            </div>
+            
+            <div style={{ textAlign: 'center', marginTop: '40px', fontSize: '10px', color: '#94a3b8', fontStyle: 'italic' }}>
+              Báo cáo được khởi tạo tự động bởi Hệ Thống Quản Lý Hoà Hiệp AI
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main UI */}
       <div className="bg-white p-8 rounded-2xl shadow-xl border border-blue-50">
         <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
           <h2 className="text-xl font-black text-blue-900 uppercase flex items-center gap-3">
@@ -955,15 +1096,44 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
           Báo cáo cá nhân
         </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="md:col-span-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div className="relative">
+            <span className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </span>
+            <input 
+              type="text"
+              placeholder="Tìm tên học sinh..."
+              value={reportSearchTerm}
+              onChange={(e) => setReportSearchTerm(e.target.value)}
+              className="w-full pl-11 pr-4 py-3 border border-gray-100 bg-slate-50/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm font-bold text-sm text-gray-700 transition-all"
+            />
+          </div>
+          <div className="relative">
             <select 
-              className="w-full p-4 border border-gray-200 rounded-xl font-bold text-gray-700 bg-slate-50 outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
+              value={reportFilterGrade}
+              onChange={(e) => setReportFilterGrade(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-100 bg-slate-50/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm font-black text-[11px] text-blue-800 uppercase tracking-widest transition-all"
+            >
+              <option value="">Tất cả Nhóm</option>
+              {activeGradesForFilter.map((grade) => (
+                <option key={grade} value={grade}>Nhóm {grade}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-8">
+          <div className="md:col-span-2 lg:col-span-2">
+            <select 
+              className="w-full p-4 border border-gray-200 rounded-xl font-bold text-gray-700 bg-white outline-none focus:ring-2 focus:ring-blue-500 shadow-md"
               value={selectedStudentName}
               onChange={(e) => setSelectedStudentName(e.target.value)}
             >
-              <option value="">-- Chọn học sinh để xem dữ liệu chi tiết --</option>
-              {students.map((s, idx) => (
+              <option value="">-- Kết quả: {filteredStudentsForReport.length} học sinh --</option>
+              {filteredStudentsForReport.map((s, idx) => (
                 <option key={idx} value={s['HỌ TÊN HS']}>{s['HỌ TÊN HS']} (Nhóm {s['KHỐI']})</option>
               ))}
             </select>
@@ -986,10 +1156,19 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
           >
             Word
           </button>
+          <button
+            onClick={exportStudentReportJPG}
+            disabled={!selectedStudent || isExporting}
+            className={`flex items-center justify-center gap-2 px-4 py-4 rounded-xl font-black transition-all shadow-lg active:scale-95 ${
+              selectedStudent && !isExporting ? 'bg-amber-600 text-white hover:bg-amber-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+            }`}
+          >
+            JPEG
+          </button>
         </div>
 
         {selectedStudent && studentDetailStats && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 animate-slideUp">
+          <div ref={studentReportRef} className="grid grid-cols-1 lg:grid-cols-2 gap-10 animate-slideUp bg-white p-2 rounded-2xl">
             <div className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-slate-50 p-5 rounded-2xl border border-gray-100">
