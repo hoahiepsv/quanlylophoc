@@ -42,10 +42,15 @@ function doPost(e) {
         let obj = { rowIndex: index + 2 }; 
         headers.forEach((header, i) => {
           let val = row[i];
-          // KIỂM TRA VÀ CHUẨN HOÁ NGÀY THÁNG ĐỂ TRÁNH NHẢY MÚI GIỜ
+          
+          // XỬ LÝ NGÀY THÁNG TRIỆT ĐỂ: TRÁNH LỖI LÙI 1 NGÀY DO MÚI GIỜ
           if (val instanceof Date) {
             val = Utilities.formatDate(val, tz, "yyyy-MM-dd");
+          } else if (val && typeof val === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(val)) {
+            // Nếu là chuỗi ISO gửi từ App lên trước đó
+            val = Utilities.formatDate(new Date(val), tz, "yyyy-MM-dd");
           }
+          
           obj[header] = val;
         });
         return obj;
