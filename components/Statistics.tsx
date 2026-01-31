@@ -4,6 +4,7 @@ import { Student } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import html2canvas from 'html2canvas';
 import { geminiService } from '../services/geminiService';
+import * as XLSX from 'xlsx';
 import { 
   Document, 
   Packer, 
@@ -22,6 +23,14 @@ import {
 interface StatisticsProps {
   students: Student[];
 }
+
+// Hàm chuẩn hoá ngày an toàn để tránh nhảy ngày do múi giờ
+const cleanDateStr = (val: any): string => {
+  if (!val) return '';
+  const dateObj = new Date(val);
+  if (isNaN(dateObj.getTime())) return String(val).split(/[T ]/)[0];
+  return dateObj.toLocaleDateString('en-CA');
+};
 
 const Statistics: React.FC<StatisticsProps> = ({ students }) => {
   const [selectedStudentName, setSelectedStudentName] = useState<string>('');
@@ -43,7 +52,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
 
   const formatDateVN = (dateStr: string) => {
     if (!dateStr) return '';
-    const clean = dateStr.split(/[T ]/)[0];
+    const clean = cleanDateStr(dateStr);
     const parts = clean.split('-');
     if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
     return clean;
@@ -51,7 +60,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
 
   const getRequiredMonths = (startDateStr: string) => {
     if (!startDateStr) return [];
-    const dateOnly = startDateStr.split(/[T ]/)[0];
+    const dateOnly = cleanDateStr(startDateStr);
     const parts = dateOnly.split('-');
     if (parts.length < 3) return [];
     
@@ -71,9 +80,9 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
   };
 
   const calculateAttended = (student: Student) => {
-    const schedule = (student['LỊCH HỌC'] || '').split(' ').filter(d => d);
-    const absences = (student['ĐIỂM DANH HS'] || '').split(' ').filter(d => d);
-    const nowStr = today.toISOString().split('T')[0];
+    const schedule = (student['LỊCH HỌC'] || '').split(' ').filter(d => d).map(d => cleanDateStr(d));
+    const absences = (student['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).map(d => cleanDateStr(d));
+    const nowStr = cleanDateStr(today);
     return schedule.filter(d => d <= nowStr && !absences.includes(d)).length;
   };
 
@@ -132,10 +141,10 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
     if (!selectedStudent) return null;
 
     const fees = (selectedStudent['ĐÓNG HỌC PHÍ'] || '').split(' ').filter(f => f);
-    const schedule = (selectedStudent['LỊCH HỌC'] || '').split(' ').filter(d => d);
-    const absences = (selectedStudent['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).sort();
+    const schedule = (selectedStudent['LỊCH HỌC'] || '').split(' ').filter(d => d).map(d => cleanDateStr(d));
+    const absences = (selectedStudent['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).map(d => cleanDateStr(d)).sort();
     
-    const nowStr = today.toISOString().split('T')[0];
+    const nowStr = cleanDateStr(today);
     const attendedCount = calculateAttended(selectedStudent);
     const totalSessionsInMonth = schedule.filter(d => d <= nowStr).length;
     
@@ -168,6 +177,46 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
       chartData
     };
   }, [selectedStudent, today]);
+
+  // HÀM SAO LƯU EXCEL
+  const exportBackupExcel = () => {
+    if (students.length === 0) {
+      alert("Không có dữ liệu để sao lưu.");
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      // Chuẩn bị dữ liệu sạch (loại bỏ rowIndex kỹ thuật)
+      const excelData = students.map(s => ({
+        'STT': s['STT'],
+        'HỌ TÊN HS': s['HỌ TÊN HS'],
+        'KHỐI': s['KHỐI'],
+        'TÊN LỚP': s['TÊN LỚP'],
+        'SỐ ĐIỆN THOẠI 1': s['SỐ ĐIỆN THOẠI 1'],
+        'SỐ ĐIỆN THOẠI 2': s['SỐ ĐIỆN THOẠI 2'],
+        'NGÀY BẮT ĐẦU': cleanDateStr(s['NGÀY BẮT ĐẦU']),
+        'LỊCH HỌC': s['LỊCH HỌC'],
+        'ĐIỂM DANH HS': s['ĐIỂM DANH HS'],
+        'ĐÓNG HỌC PHÍ': s['ĐÓNG HỌC PHÍ']
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(excelData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "StudentsData");
+
+      // Tự động điều chỉnh độ rộng cột
+      const max_width = excelData.reduce((w, r) => Math.max(w, r['HỌ TÊN HS'].length), 10);
+      worksheet["!cols"] = [{ wch: 5 }, { wch: max_width + 5 }, { wch: 10 }, { wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 40 }, { wch: 40 }, { wch: 30 }];
+
+      XLSX.writeFile(workbook, `Sao_Luu_Datasheet_Hoc_Sinh_${cleanDateStr(today)}.xlsx`);
+    } catch (err) {
+      console.error(err);
+      alert("Lỗi khi tạo file sao lưu Excel.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const exportClassReportWord = async () => {
     setIsExporting(true);
@@ -828,7 +877,17 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
             <span className="w-2 h-8 bg-blue-600 rounded-full"></span>
             Thống kê nhóm (T{currentMonth}/{currentYear})
           </h2>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap justify-center gap-3">
+            <button 
+              onClick={exportBackupExcel}
+              disabled={isExporting}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-xl font-black text-[11px] shadow-lg flex items-center gap-2 transition-all active:scale-95 disabled:bg-gray-400"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+              </svg>
+              SAO LƯU (Excel)
+            </button>
             <button 
               onClick={exportClassReportWord}
               disabled={isExporting}
