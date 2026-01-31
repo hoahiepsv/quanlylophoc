@@ -136,8 +136,8 @@ const App: React.FC = () => {
   const sortedStudents = useMemo(() => {
     if (!Array.isArray(students)) return [];
     return [...students].sort((a, b) => {
-      const gradeA = String(a['KHỐI'] || '');
-      const gradeB = String(b['KHỐI'] || '');
+      const gradeA = String(a['KHỐI'] || '').trim();
+      const gradeB = String(b['KHỐI'] || '').trim();
       
       const numA = parseInt(gradeA);
       const numB = parseInt(gradeB);
@@ -151,23 +151,27 @@ const App: React.FC = () => {
         return 1;
       } else {
         if (gradeA !== gradeB) {
+          // "Đã thôi học" luôn ở cuối cùng
           if (gradeA === 'Đã thôi học') return 1;
           if (gradeB === 'Đã thôi học') return -1;
-          return gradeA.localeCompare(gradeB);
+          return gradeA.localeCompare(gradeB, 'vi');
         }
       }
 
       // 2. Nếu cùng nhóm, sắp xếp theo Tên (chữ cuối cùng của họ tên)
       const nameA = (a['HỌ TÊN HS'] || '').trim();
       const nameB = (b['HỌ TÊN HS'] || '').trim();
-      const partsA = nameA.split(' ');
-      const partsB = nameB.split(' ');
+      
+      const partsA = nameA.split(' ').filter(p => p);
+      const partsB = nameB.split(' ').filter(p => p);
+      
       const lastA = partsA[partsA.length - 1] || '';
       const lastB = partsB[partsB.length - 1] || '';
 
-      if (lastA !== lastB) {
-        return lastA.localeCompare(lastB, 'vi');
-      }
+      const cmpLast = lastA.localeCompare(lastB, 'vi');
+      if (cmpLast !== 0) return cmpLast;
+      
+      // Nếu tên giống nhau, so sánh toàn bộ họ tên
       return nameA.localeCompare(nameB, 'vi');
     });
   }, [students]);
@@ -206,7 +210,7 @@ const App: React.FC = () => {
       if (!isNaN(nB)) return 1;
       if (a === 'Đã thôi học') return 1;
       if (b === 'Đã thôi học') return -1;
-      return a.localeCompare(b);
+      return a.localeCompare(b, 'vi');
     });
   }, [gradeCounts]);
 
