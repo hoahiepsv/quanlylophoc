@@ -64,7 +64,45 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
       const matchKhoi = filterKhoi === '' || String(s['KHỐI']) === filterKhoi;
       const matchSearch = s['HỌ TÊN HS'].toLowerCase().includes(searchTerm.toLowerCase());
       return matchKhoi && matchSearch;
-    }).sort((a, b) => parseInt(String(a['KHỐI'])) - parseInt(String(b['KHỐI'])));
+    }).sort((a, b) => {
+      // LOGIC SẮP XẾP ĐỒNG BỘ VỚI APP.TSX
+      const gradeA = String(a['KHỐI'] || '').trim();
+      const gradeB = String(b['KHỐI'] || '').trim();
+      
+      const numA = parseInt(gradeA);
+      const numB = parseInt(gradeB);
+
+      // 1. Sắp xếp theo Nhóm/Khối (Số lên đầu)
+      if (!isNaN(numA) && !isNaN(numB)) {
+        if (numA !== numB) return numA - numB;
+      } else if (!isNaN(numA)) {
+        return -1;
+      } else if (!isNaN(numB)) {
+        return 1;
+      } else {
+        if (gradeA !== gradeB) {
+          if (gradeA === 'Đã thôi học') return 1;
+          if (gradeB === 'Đã thôi học') return -1;
+          return gradeA.localeCompare(gradeB, 'vi');
+        }
+      }
+
+      // 2. Nếu cùng nhóm, sắp xếp theo Tên (chữ cuối cùng của họ tên)
+      const nameA = (a['HỌ TÊN HS'] || '').trim();
+      const nameB = (b['HỌ TÊN HS'] || '').trim();
+      
+      const partsA = nameA.split(' ').filter(p => p);
+      const partsB = nameB.split(' ').filter(p => p);
+      
+      const lastA = partsA[partsA.length - 1] || '';
+      const lastB = partsB[partsB.length - 1] || '';
+
+      const cmpLast = lastA.localeCompare(lastB, 'vi');
+      if (cmpLast !== 0) return cmpLast;
+      
+      // Nếu tên giống nhau, so sánh toàn bộ họ tên chuẩn Việt
+      return nameA.localeCompare(nameB, 'vi');
+    });
   }, [students, filterKhoi, searchTerm]);
 
   const activeGradesForFilter = useMemo(() => {
@@ -73,7 +111,14 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
       const k = String(s['KHỐI']);
       if (k && k !== 'undefined') grades.add(k);
     });
-    return Array.from(grades).sort((a, b) => parseInt(a) - parseInt(b));
+    return Array.from(grades).sort((a, b) => {
+      const nA = parseInt(a);
+      const nB = parseInt(b);
+      if (!isNaN(nA) && !isNaN(nB)) return nA - nB;
+      if (!isNaN(nA)) return -1;
+      if (!isNaN(nB)) return 1;
+      return a.localeCompare(b, 'vi');
+    });
   }, [students]);
 
   const toggleStudent = (rowIndex: number) => {

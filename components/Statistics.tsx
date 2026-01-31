@@ -871,34 +871,34 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
       </div>
 
       {/* Main UI */}
-      <div className="bg-white p-8 rounded-2xl shadow-xl border border-blue-50">
+      <div className="bg-white p-6 md:p-8 rounded-2xl shadow-xl border border-blue-50">
         <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
           <h2 className="text-xl font-black text-blue-900 uppercase flex items-center gap-3">
             <span className="w-2 h-8 bg-blue-600 rounded-full"></span>
             Thống kê nhóm (T{currentMonth}/{currentYear})
           </h2>
-          <div className="flex flex-wrap justify-center gap-3">
+          <div className="grid grid-cols-3 md:flex md:flex-wrap justify-center gap-2 md:gap-3 w-full md:w-auto">
             <button 
               onClick={exportBackupExcel}
               disabled={isExporting}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-xl font-black text-[11px] shadow-lg flex items-center gap-2 transition-all active:scale-95 disabled:bg-gray-400"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-3 rounded-xl font-black text-[10px] md:text-[11px] shadow-lg flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 transition-all active:scale-95 disabled:bg-gray-400"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
               </svg>
-              SAO LƯU (Excel)
+              <span className="truncate">SAO LƯU</span>
             </button>
             <button 
               onClick={exportClassReportWord}
               disabled={isExporting}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-3 rounded-xl font-black text-[11px] shadow-lg flex items-center gap-2 transition-all active:scale-95 disabled:bg-gray-400"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-3 rounded-xl font-black text-[10px] md:text-[11px] shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95 disabled:bg-gray-400 uppercase"
             >
               Word
             </button>
             <button 
               onClick={exportClassReportJPG}
               disabled={isExporting}
-              className="bg-amber-600 hover:bg-amber-700 text-white px-5 py-3 rounded-xl font-black text-[11px] shadow-lg flex items-center gap-2 transition-all active:scale-95 disabled:bg-gray-400"
+              className="bg-amber-600 hover:bg-amber-700 text-white px-2 py-3 rounded-xl font-black text-[10px] md:text-[11px] shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95 disabled:bg-gray-400 uppercase"
             >
               JPEG
             </button>
@@ -975,7 +975,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
         </div>
       </div>
 
-      <div className="bg-white p-8 rounded-2xl shadow-xl border border-blue-50">
+      <div className="bg-white p-6 md:p-8 rounded-2xl shadow-xl border border-blue-50">
         <h2 className="text-xl font-black text-blue-900 uppercase mb-8 flex items-center gap-3">
           <span className="w-2 h-8 bg-blue-600 rounded-full"></span>
           Báo cáo cá nhân
@@ -1008,8 +1008,8 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
             </select>
           </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-8">
-          <div className="md:col-span-2 lg:col-span-2">
+        <div className="flex flex-col md:grid md:grid-cols-4 lg:grid-cols-4 gap-3 mb-8">
+          <div className="md:col-span-2">
             <select 
               className="w-full p-4 border border-gray-200 rounded-xl font-bold text-gray-700 bg-white outline-none focus:ring-2 focus:ring-blue-500 shadow-md"
               value={selectedStudentName}
@@ -1021,24 +1021,26 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
               ))}
             </select>
           </div>
-          <button
-            onClick={exportStudentReportWord}
-            disabled={!selectedStudent || isExporting}
-            className={`flex items-center justify-center gap-2 px-4 py-4 rounded-xl font-black transition-all shadow-lg active:scale-95 ${
-              selectedStudent && !isExporting ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-            }`}
-          >
-            Word
-          </button>
-          <button
-            onClick={exportStudentReportJPG}
-            disabled={!selectedStudent || isExporting}
-            className={`flex items-center justify-center gap-2 px-4 py-4 rounded-xl font-black transition-all shadow-lg active:scale-95 ${
-              selectedStudent && !isExporting ? 'bg-amber-600 text-white hover:bg-amber-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-            }`}
-          >
-            JPEG
-          </button>
+          <div className="grid grid-cols-2 gap-2 md:col-span-2">
+            <button
+              onClick={exportStudentReportWord}
+              disabled={!selectedStudent || isExporting}
+              className={`flex items-center justify-center gap-2 px-4 py-4 rounded-xl font-black transition-all shadow-lg active:scale-95 uppercase ${
+                selectedStudent && !isExporting ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              Word
+            </button>
+            <button
+              onClick={exportStudentReportJPG}
+              disabled={!selectedStudent || isExporting}
+              className={`flex items-center justify-center gap-2 px-4 py-4 rounded-xl font-black transition-all shadow-lg active:scale-95 uppercase ${
+                selectedStudent && !isExporting ? 'bg-amber-600 text-white hover:bg-amber-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              JPEG
+            </button>
+          </div>
         </div>
         {selectedStudent && studentDetailStats && (
           <div ref={studentReportRef} className="grid grid-cols-1 lg:grid-cols-2 gap-10 animate-slideUp bg-white p-2 rounded-2xl">
