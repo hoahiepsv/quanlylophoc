@@ -2,7 +2,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { Student } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { geminiService } from '../services/geminiService';
 import { 
@@ -30,16 +29,15 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
   const [reportFilterGrade, setReportFilterGrade] = useState('');
   const [isExporting, setIsExporting] = useState(false);
   
-  const chartRef = useRef<HTMLDivElement>(null);
   const studentReportRef = useRef<HTMLDivElement>(null);
   const jpegTemplateRef = useRef<HTMLDivElement>(null);
+  const classJpegTemplateRef = useRef<HTMLDivElement>(null);
 
   const today = useMemo(() => new Date(), []);
   const currentMonth = today.getMonth() + 1;
   const currentYear = today.getFullYear();
   const currentMonthTag = `T${currentMonth}/${currentYear}`;
   
-  const PDF_MARGIN = 10;
   const WORD_FONT = "Times New Roman";
   const WORD_SIZE = 26; // 13pt = 26 half-points in docx
 
@@ -139,6 +137,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
     
     const nowStr = today.toISOString().split('T')[0];
     const attendedCount = calculateAttended(selectedStudent);
+    const totalSessionsCount = schedule.filter(d => d <= nowStr).length;
     
     const required = getRequiredMonths(selectedStudent['NGÀY BẮT ĐẦU']);
     const unpaidMonths = required.filter(m => !fees.includes(m));
@@ -158,6 +157,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
     })).slice(-12);
 
     return {
+      totalSessionsCount,
       attendedCount,
       absencesCount: absences.length,
       absenceDates: absences,
@@ -168,171 +168,6 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
       chartData
     };
   }, [selectedStudent, today]);
-
-  const captureAndAddSection = async (doc: jsPDF, html: string, yOffset: number): Promise<number> => {
-    const container = document.createElement('div');
-    container.style.width = '1000px'; 
-    container.style.padding = '30px 40px'; 
-    container.style.fontFamily = '"Times New Roman", Times, serif';
-    container.style.fontSize = '14pt';
-    container.style.lineHeight = '1.6';
-    container.style.color = '#000';
-    container.style.backgroundColor = '#fff';
-    container.style.position = 'fixed';
-    container.style.left = '-9999px';
-    container.innerHTML = html;
-    document.body.appendChild(container);
-
-    const canvas = await html2canvas(container, { 
-      scale: 4, 
-      useCORS: true, 
-      backgroundColor: '#ffffff',
-      logging: false,
-      windowWidth: 1000
-    });
-    
-    const imgData = canvas.toDataURL('image/jpeg', 1.0);
-    const pdfWidth = doc.internal.pageSize.getWidth();
-    const margin = PDF_MARGIN;
-    const imgWidth = pdfWidth - (margin * 2);
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-    if (yOffset + imgHeight > doc.internal.pageSize.getHeight() - margin) {
-      doc.addPage();
-      yOffset = margin;
-    }
-
-    doc.addImage(imgData, 'JPEG', margin, yOffset, imgWidth, imgHeight, undefined, 'FAST');
-    document.body.removeChild(container);
-    return yOffset + imgHeight;
-  };
-
-  const exportClassReport = async () => {
-    setIsExporting(true);
-    try {
-      const doc = new jsPDF({
-        orientation: 'p',
-        unit: 'mm',
-        format: 'a4',
-        compress: true
-      });
-      
-      const aiInsights = await geminiService.generateReportContent('class', {
-        total: students.length,
-        paid: classStats.paidThisMonth.length,
-        unpaid: classStats.unpaidThisMonth.length,
-        debtors: classStats.debtors.length
-      });
-
-      let currentY = PDF_MARGIN;
-
-      currentY = await captureAndAddSection(doc, `
-        <div style="text-align:center; border-bottom: 2px solid #1e3a8a; padding-bottom: 15px; margin-bottom: 20px;">
-          <h1 style="font-size:26pt; color:#1e3a8a; text-transform:uppercase; margin-bottom:5px;">Báo cáo tổng quan học tập</h1>
-          <p style="font-size:13pt; color:#444; margin:0;">Thời gian: Tháng ${currentMonth} Năm ${currentYear}</p>
-          <p style="font-size:11pt; color:#666; margin-top:5px;">Ngày kết xuất: ${today.toLocaleDateString('vi-VN')} | Đơn vị: Trung tâm Hoà Hiệp AI</p>
-        </div>
-      `, currentY);
-
-      currentY = await captureAndAddSection(doc, `
-        <div style="padding:25px; border:1px solid #cbd5e1; border-radius:15px; background:#f1f5f9; margin-bottom:25px;">
-          <h3 style="font-size:16pt; color:#1e3a8a; margin-top:0; margin-bottom:12px; border-bottom:1px solid #cbd5e1; padding-bottom:8px; font-weight:bold;">I. NHẬN XÉT ĐÁNH GIÁ CHUNG:</h3>
-          <p style="text-align:justify; margin:0; line-height: 1.8; color: #1e293b; font-size:14pt;">${aiInsights}</p>
-        </div>
-      `, currentY);
-
-      currentY = await captureAndAddSection(doc, `
-        <h3 style="font-size:16pt; color:#1e3a8a; border-left:8px solid #1e3a8a; padding-left:15px; margin-bottom:15px; font-weight:bold;">II. SỐ LIỆU THỐNG KÊ CHI TIẾT:</h3>
-        <table style="width:100%; border-collapse:collapse; margin-bottom:10px; font-size:13pt;">
-          <tr style="background:#1e3a8a; color:#fff;">
-            <th style="border:1px solid #000; padding:12px; text-align:left;">Hạng mục đánh giá</th>
-            <th style="border:1px solid #000; padding:12px; text-align:center; width:150px;">Số lượng</th>
-            <th style="border:1px solid #000; padding:12px; text-align:center; width:150px;">Tỷ lệ (%)</th>
-          </tr>
-          <tr>
-            <td style="border:1px solid #000; padding:12px;">Tổng số học sinh quản lý</td>
-            <td style="border:1px solid #000; padding:12px; text-align:center; font-weight:bold;">${students.length}</td>
-            <td style="border:1px solid #000; padding:12px; text-align:center;">100%</td>
-          </tr>
-          <tr>
-            <td style="border:1px solid #000; padding:12px; color:#059669;">Đã hoàn thành học phí (T${currentMonth})</td>
-            <td style="border:1px solid #000; padding:12px; text-align:center; font-weight:bold; color:#059669;">${classStats.paidThisMonth.length}</td>
-            <td style="border:1px solid #000; padding:12px; text-align:center;">${((classStats.paidThisMonth.length / students.length) * 100).toFixed(1)}%</td>
-          </tr>
-          <tr>
-            <td style="border:1px solid #000; padding:12px; color:#dc2626;">Chưa hoàn thành học phí (T${currentMonth})</td>
-            <td style="border:1px solid #000; padding:12px; text-align:center; font-weight:bold; color:#dc2626;">${classStats.unpaidThisMonth.length}</td>
-            <td style="border:1px solid #000; padding:12px; text-align:center;">${((classStats.unpaidThisMonth.length / students.length) * 100).toFixed(1)}%</td>
-          </tr>
-          <tr style="background: #fff7ed;">
-            <td style="border:1px solid #000; padding:12px; color:#ea580c; font-weight:bold;">Học sinh tồn đọng phí các tháng cũ</td>
-            <td style="border:1px solid #000; padding:12px; text-align:center; font-weight:bold; color:#ea580c;">${classStats.debtors.length}</td>
-            <td style="border:1px solid #000; padding:12px; text-align:center;">-</td>
-          </tr>
-        </table>
-      `, currentY);
-
-      const tableTitles = [
-        { title: `PHỤ LỤC 1: DANH SÁCH HOÀN THÀNH HỌC PHÍ (THÁNG ${currentMonth})`, list: classStats.paidThisMonth, type: 'paid' },
-        { title: `PHỤ LỤC 2: DANH SÁCH NHẮC ĐÓNG PHÍ (THÁNG ${currentMonth})`, list: classStats.unpaidThisMonth, type: 'preparing' },
-        { title: `PHỤ LỤC 3: DANH SÁCH NỢ TỒN ĐỌNG (THÁNG TRƯỚC)`, list: classStats.debtors.map(d => d.student), type: 'debt' }
-      ];
-
-      for (const entry of tableTitles) {
-        if (entry.list.length > 0) {
-          const isDebt = entry.type === 'debt';
-          const tableHtml = `
-            <h3 style="font-size:15pt; color:#334155; border-left:8px solid #64748b; padding-left:15px; margin-top:30px; margin-bottom:12px; font-weight:bold;">${entry.title}</h3>
-            <table style="width:100%; border-collapse:collapse; font-size:11pt;">
-              <tr style="background:#f8fafc;">
-                <th style="border:1px solid #000; padding:10px; width:40px; text-align:center;">STT</th>
-                <th style="border:1px solid #000; padding:10px;">Họ tên học sinh</th>
-                <th style="border:1px solid #000; padding:10px; width:55px; text-align:center;">Nhóm</th>
-                <th style="border:1px solid #000; padding:10px; width:85px; text-align:center;">Bắt đầu</th>
-                <th style="border:1px solid #000; padding:10px; width:65px; text-align:center;">Số buổi</th>
-                <th style="border:1px solid #000; padding:10px; width:100px; text-align:center;">SĐT</th>
-                ${isDebt ? '<th style="border:1px solid #000; padding:10px; width:140px; text-align:center;">Tháng nợ cũ</th>' : '<th style="border:1px solid #000; padding:10px; width:100px; text-align:center;">Ghi chú</th>'}
-              </tr>
-              ${entry.list.map((s, idx) => {
-                const unpaid = isDebt ? (classStats.debtors.find(d => d.student === s)?.unpaidMonths.join(', ') || '') : '';
-                return `
-                <tr>
-                  <td style="border:1px solid #000; padding:10px; text-align:center;">${idx + 1}</td>
-                  <td style="border:1px solid #000; padding:10px; font-weight:bold;">${s['HỌ TÊN HS']}</td>
-                  <td style="border:1px solid #000; padding:10px; text-align:center;">${s['TÊN LỚP']}</td>
-                  <td style="border:1px solid #000; padding:10px; text-align:center;">${formatDateVN(s['NGÀY BẮT ĐẦU'])}</td>
-                  <td style="border:1px solid #000; padding:10px; text-align:center; font-weight:bold; color:#2563eb;">${calculateAttended(s)}</td>
-                  <td style="border:1px solid #000; padding:10px; text-align:center; font-weight:bold; color:#1e40af;">
-                    ${s['SỐ ĐIỆN THOẠI 1'] || ''}
-                  </td>
-                  <td style="border:1px solid #000; padding:10px; text-align:center; ${isDebt ? 'color:#dc2626; font-weight:bold; font-size:9pt;' : ''}">
-                    ${isDebt ? unpaid : ''}
-                  </td>
-                </tr>
-              `}).join('')}
-            </table>
-          `;
-          currentY = await captureAndAddSection(doc, tableHtml, currentY);
-        }
-      }
-
-      await captureAndAddSection(doc, `
-        <div style="margin-top:50px; text-align:right; font-size:12pt;">
-           <div style="display:inline-block; text-align:center;">
-             <p style="margin-bottom:80px; font-weight:bold;">NGƯỜI LẬP BÁO CÁO</p>
-             <p style="font-weight:bold; text-transform:uppercase;">LÊ HOÀ HIỆP</p>
-           </div>
-        </div>
-      `, currentY);
-
-      doc.save(`Bao_Cao_Lop_T${currentMonth}_HD.pdf`);
-    } catch (err) {
-      console.error(err);
-      alert("Lỗi khi xuất PDF.");
-    } finally {
-      setIsExporting(false);
-    }
-  };
 
   const exportClassReportWord = async () => {
     setIsExporting(true);
@@ -532,125 +367,6 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
     }
   };
 
-  const exportStudentReport = async () => {
-    if (!selectedStudent || !studentDetailStats) return;
-    setIsExporting(true);
-    try {
-      const doc = new jsPDF({
-        orientation: 'p',
-        unit: 'mm',
-        format: 'a4',
-        compress: true
-      });
-      
-      const aiComment = await geminiService.generateReportContent('student', {
-        name: selectedStudent['HỌ TÊN HS'],
-        attended: studentDetailStats.attendedCount,
-        absences: studentDetailStats.absencesCount,
-        unpaidMonths: studentDetailStats.unpaidLabels
-      });
-
-      let currentY = PDF_MARGIN;
-      const detailedAbsences = studentDetailStats.absenceDates.map(d => formatDateVN(d)).join(', ') || 'Không vắng';
-      const detailedPaidMonths = studentDetailStats.paidMonths.join(', ') || 'Chưa đóng';
-      const periodStr = `Từ ${formatDateVN(selectedStudent['NGÀY BẮT ĐẦU'])} đến ${today.toLocaleDateString('vi-VN')}`;
-
-      currentY = await captureAndAddSection(doc, `
-        <div style="text-align:center; margin-bottom: 25px;">
-          <h1 style="font-size:26pt; color:#2563eb; text-transform:uppercase; margin-bottom:5px; font-weight:bold;">PHIẾU THEO DÕI HỌC TẬP</h1>
-        </div>
-        <div style="display:flex; justify-content:space-between; margin-bottom:20px; border-top: 3px solid #2563eb; border-bottom: 3px solid #2563eb; padding: 15px 0;">
-          <div style="width: 60%;">
-            <p style="margin:5px 0; font-size:14pt;"><strong>Họ và tên:</strong> <span style="font-size:18pt; color:#1e3a8a; font-weight:bold;">${selectedStudent['HỌ TÊN HS']}</span></p>
-            <p style="margin:5px 0; font-size:13pt;"><strong>Lớp đào tạo:</strong> ${selectedStudent['TÊN LỚP']} (Nhóm ${selectedStudent['KHỐI']})</p>
-          </div>
-          <div style="width: 40%; text-align:right;">
-            <p style="margin:5px 0; font-size:13pt;"><strong>Ngày tham gia:</strong> ${formatDateVN(selectedStudent['NGÀY BẮT ĐẦU'])}</p>
-            <p style="margin:5px 0; font-size:13pt;"><strong>Ngày in phiếu:</strong> ${today.toLocaleDateString('vi-VN')}</p>
-          </div>
-        </div>
-      `, currentY);
-
-      currentY = await captureAndAddSection(doc, `
-        <div style="background:#f0f9ff; border-radius:15px; padding:25px; margin-bottom:25px; border:2px solid #bae6fd;">
-          <h3 style="margin-top:0; color:#0369a1; font-size:15pt; border-bottom:1px solid #bae6fd; padding-bottom:10px; margin-bottom:15px; font-weight:bold;">LỜI NHẮN TỪ THẦY / CÔ:</h3>
-          <p style="font-style:italic; margin:0; text-align:justify; font-size:14pt; line-height:1.7;">"${aiComment}"</p>
-        </div>
-      `, currentY);
-
-      currentY = await captureAndAddSection(doc, `
-        <h3 style="font-size:16pt; color:#1e3a8a; border-left:8px solid #2563eb; padding-left:15px; margin-bottom:15px; font-weight:bold; text-transform:uppercase;">KẾT QUẢ CHUYÊN CẦN & HỌC PHÍ:</h3>
-        <table style="width:100%; border-collapse:collapse; margin-bottom:25px; font-size:13pt;">
-          <tr style="background:#2563eb; color:#fff;">
-            <th style="border:1px solid #000; padding:12px; text-align:center; width:280px;">CÁC TIÊU CHÍ THEO DÕI</th>
-            <th style="border:1px solid #000; padding:12px; text-align:center; width:150px;">KẾT QUẢ</th>
-            <th style="border:1px solid #000; padding:12px; text-align:center;">CHI TIẾT:</th>
-          </tr>
-          <tr>
-            <td style="border:1px solid #000; padding:12px; text-align:center;">Số buổi học tập trung thực tế</td>
-            <td style="border:1px solid #000; padding:12px; text-align:center; font-weight:bold; color:#059669;">${studentDetailStats.attendedCount} buổi</td>
-            <td style="border:1px solid #000; padding:12px; text-align:center; color:#666;">${periodStr}</td>
-          </tr>
-          <tr>
-            <td style="border:1px solid #000; padding:12px; text-align:center;">Số buổi vắng mặt (có phép/không phép)</td>
-            <td style="border:1px solid #000; padding:12px; text-align:center; font-weight:bold; color:#dc2626;">${studentDetailStats.absencesCount} buổi</td>
-            <td style="border:1px solid #000; padding:12px; text-align:center; font-size:11pt;">${detailedAbsences}</td>
-          </tr>
-          <tr>
-            <td style="border:1px solid #000; padding:12px; text-align:center;">Số tháng đã hoàn tất học phí</td>
-            <td style="border:1px solid #000; padding:12px; text-align:center; font-weight:bold;">${studentDetailStats.paidCount} tháng</td>
-            <td style="border:1px solid #000; padding:12px; text-align:center; font-size:11pt;">${detailedPaidMonths}</td>
-          </tr>
-          <tr>
-            <td style="border:1px solid #000; padding:12px; text-align:center;">Các tháng còn nợ học phí</td>
-            <td style="border:1px solid #000; padding:12px; text-align:center; font-weight:bold; color:#dc2626;">${studentDetailStats.unpaidCount} tháng</td>
-            <td style="border:1px solid #000; padding:12px; text-align:center; font-weight:bold; color:#dc2626; font-size:11pt;">${studentDetailStats.unpaidLabels || 'Đã hoàn thành ✅'}</td>
-          </tr>
-        </table>
-      `, currentY);
-
-      if (chartRef.current) {
-        const originalChartCanvas = await html2canvas(chartRef.current, { scale: 4, useCORS: true, logging: false });
-        const chartImgData = originalChartCanvas.toDataURL('image/jpeg', 1.0);
-        const pdfWidth = doc.internal.pageSize.getWidth();
-        const margin = PDF_MARGIN;
-        const finalImgWidth = pdfWidth - (margin * 2);
-        const finalImgHeight = (originalChartCanvas.height * finalImgWidth) / originalChartCanvas.width;
-
-        if (currentY + finalImgHeight > doc.internal.pageSize.getHeight() - margin) {
-          doc.addPage();
-          currentY = PDF_MARGIN;
-        }
-
-        doc.addImage(chartImgData, 'JPEG', margin, currentY, finalImgWidth, finalImgHeight, undefined, 'FAST');
-        currentY += finalImgHeight + 15;
-      }
-
-      await captureAndAddSection(doc, `
-        <div style="display:flex; justify-content:space-between; margin-top:40px;">
-          <div style="text-align:center; width: 45%;">
-            <p style="font-weight:bold;">XÁC NHẬN CỦA PHỤ HUYNH</p>
-            <p style="font-size:11pt; font-style:italic;">(Ký và ghi rõ họ tên)</p>
-          </div>
-          <div style="text-align:center; width: 45%;">
-             <div style="display:inline-block; text-align:center;">
-               <p style="font-weight:bold;">GIÁO VIÊN CHỦ NHIỆM</p>
-               <p style="font-size:11pt; font-style:italic;">(Đã phê duyệt điện tử)</p>
-               <p style="margin-top:70px; font-weight:bold; font-size:16pt;">LÊ HOÀ HIỆP</p>
-             </div>
-          </div>
-        </div>
-      `, currentY);
-
-      doc.save(`Phieu_Hoc_Tap_${selectedStudent['HỌ TÊN HS']}_HD.pdf`);
-    } catch (err) {
-      console.error(err);
-      alert("Lỗi khi tạo phiếu học tập PDF.");
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
   const exportStudentReportWord = async () => {
     if (!selectedStudent || !studentDetailStats) return;
     setIsExporting(true);
@@ -663,9 +379,12 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
       });
 
       let chartBase64 = '';
-      if (chartRef.current) {
-        const canvas = await html2canvas(chartRef.current, { scale: 2, useCORS: true, logging: false });
-        chartBase64 = canvas.toDataURL('image/png').split(',')[1];
+      if (studentReportRef.current) {
+        const chartElem = studentReportRef.current.querySelector('.recharts-responsive-container');
+        if (chartElem) {
+           const canvas = await html2canvas(chartElem as HTMLElement, { scale: 2, useCORS: true, logging: false });
+           chartBase64 = canvas.toDataURL('image/png').split(',')[1];
+        }
       }
 
       const doc = new Document({
@@ -881,13 +600,12 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
     if (!selectedStudent || !studentDetailStats || !jpegTemplateRef.current) return;
     setIsExporting(true);
     try {
-      // Ensure the hidden template is populated
       const canvas = await html2canvas(jpegTemplateRef.current, {
-        scale: 4, // High quality
+        scale: 4, 
         useCORS: true,
         backgroundColor: '#ffffff',
         logging: false,
-        width: 800, // Fixed width for consistent layout
+        width: 800, 
       });
       
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
@@ -903,25 +621,40 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
     }
   };
 
+  const exportClassReportJPG = async () => {
+    if (!classJpegTemplateRef.current) return;
+    setIsExporting(true);
+    try {
+      const canvas = await html2canvas(classJpegTemplateRef.current, {
+        scale: 4,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        width: 1200,
+      });
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const link = document.createElement('a');
+      link.href = imgData;
+      link.download = `Bao_Cao_Lop_T${currentMonth}.jpg`;
+      link.click();
+    } catch (err) {
+      console.error(err);
+      alert("Lỗi khi tạo hình ảnh báo cáo lớp.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-8 animate-fadeIn">
-      {/* Hidden JPEG Template (Professional Design) */}
+      {/* Hidden Templates for Image Export */}
       {selectedStudent && studentDetailStats && (
         <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
-          <div 
-            ref={jpegTemplateRef}
-            style={{ 
-              width: '800px', 
-              padding: '40px', 
-              backgroundColor: '#ffffff', 
-              fontFamily: 'system-ui, -apple-system, sans-serif' 
-            }}
-          >
+          <div ref={jpegTemplateRef} style={{ width: '800px', padding: '40px', backgroundColor: '#ffffff', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
             <div style={{ textAlign: 'center', marginBottom: '30px', borderBottom: '4px solid #2563eb', paddingBottom: '15px' }}>
               <h1 style={{ fontSize: '32px', color: '#1e3a8a', margin: '0', textTransform: 'uppercase', fontWeight: '900' }}>Phiếu Báo Cáo Học Tập</h1>
-              <p style={{ color: '#64748b', fontSize: '16px', marginTop: '5px', fontWeight: 'bold' }}>Học viên: <span style={{ color: '#2563eb' }}>{selectedStudent['HỌ TÊN HS']}</span></p>
+              <p style={{ color: '#64748b', fontSize: '16px', marginTop: '5px', fontWeight: 'bold' }}>Học sinh: <span style={{ color: '#2563eb' }}>{selectedStudent['HỌ TÊN HS']}</span></p>
             </div>
-
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '30px' }}>
               <div style={{ padding: '20px', backgroundColor: '#f8fafc', borderRadius: '15px', border: '1px solid #e2e8f0' }}>
                 <p style={{ fontSize: '12px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', marginBottom: '5px' }}>Thông tin lớp học</p>
@@ -936,22 +669,31 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '15px', marginBottom: '30px' }}>
-              <div style={{ textAlign: 'center', padding: '15px', background: '#ecfdf5', borderRadius: '12px' }}>
-                <span style={{ display: 'block', fontSize: '10px', color: '#059669', fontWeight: 'bold' }}>ĐÃ HỌC</span>
-                <span style={{ fontSize: '24px', fontWeight: '900', color: '#065f46' }}>{studentDetailStats.attendedCount}</span>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px', marginBottom: '30px' }}>
+              <div style={{ textAlign: 'center', padding: '12px', background: '#f1f5f9', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                <span style={{ display: 'block', fontSize: '9px', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>BUỔI DẠY</span>
+                <span style={{ fontSize: '20px', fontWeight: '900', color: '#1e293b' }}>{studentDetailStats.totalSessionsCount}</span>
+                <span style={{ display: 'block', fontSize: '8px', color: '#94a3b8', marginTop: '4px' }}>Tổng buổi lịch</span>
               </div>
-              <div style={{ textAlign: 'center', padding: '15px', background: '#fef2f2', borderRadius: '12px' }}>
-                <span style={{ display: 'block', fontSize: '10px', color: '#dc2626', fontWeight: 'bold' }}>VẮNG MẶT</span>
-                <span style={{ fontSize: '24px', fontWeight: '900', color: '#991b1b' }}>{studentDetailStats.absencesCount}</span>
+              <div style={{ textAlign: 'center', padding: '12px', background: '#ecfdf5', borderRadius: '12px', border: '1px solid #d1fae5' }}>
+                <span style={{ display: 'block', fontSize: '9px', color: '#059669', fontWeight: 'bold', textTransform: 'uppercase' }}>ĐÃ HỌC</span>
+                <span style={{ fontSize: '20px', fontWeight: '900', color: '#065f46' }}>{studentDetailStats.attendedCount}</span>
+                <span style={{ display: 'block', fontSize: '8px', color: '#059669', marginTop: '4px' }}>Chuyên cần</span>
               </div>
-              <div style={{ textAlign: 'center', padding: '15px', background: '#eff6ff', borderRadius: '12px' }}>
-                <span style={{ display: 'block', fontSize: '10px', color: '#2563eb', fontWeight: 'bold' }}>ĐÓNG PHÍ</span>
-                <span style={{ fontSize: '24px', fontWeight: '900', color: '#1e40af' }}>{studentDetailStats.paidCount}</span>
+              <div style={{ textAlign: 'center', padding: '12px', background: '#fef2f2', borderRadius: '12px', border: '1px solid #fee2e2' }}>
+                <span style={{ display: 'block', fontSize: '9px', color: '#dc2626', fontWeight: 'bold', textTransform: 'uppercase' }}>VẮNG MẶT</span>
+                <span style={{ fontSize: '20px', fontWeight: '900', color: '#991b1b' }}>{studentDetailStats.absencesCount}</span>
+                <p style={{ fontSize: '7px', color: '#b91c1c', marginTop: '4px', lineHeight: '1.2' }}>{studentDetailStats.absenceDates.map(d => formatDateVN(d).split('/')[0] + '/' + formatDateVN(d).split('/')[1]).join(', ') || 'Không vắng'}</p>
               </div>
-              <div style={{ textAlign: 'center', padding: '15px', background: '#fff7ed', borderRadius: '12px' }}>
-                <span style={{ display: 'block', fontSize: '10px', color: '#ea580c', fontWeight: 'bold' }}>CHƯA ĐÓNG</span>
-                <span style={{ fontSize: '24px', fontWeight: '900', color: '#9a3412' }}>{studentDetailStats.unpaidCount}</span>
+              <div style={{ textAlign: 'center', padding: '12px', background: '#eff6ff', borderRadius: '12px', border: '1px solid #dbeafe' }}>
+                <span style={{ display: 'block', fontSize: '9px', color: '#2563eb', fontWeight: 'bold', textTransform: 'uppercase' }}>ĐÓNG PHÍ</span>
+                <span style={{ fontSize: '20px', fontWeight: '900', color: '#1e40af' }}>{studentDetailStats.paidCount}</span>
+                <p style={{ fontSize: '7px', color: '#1d4ed8', marginTop: '4px', lineHeight: '1.2' }}>{studentDetailStats.paidMonths.join(', ') || 'Chưa đóng'}</p>
+              </div>
+              <div style={{ textAlign: 'center', padding: '12px', background: '#fff7ed', borderRadius: '12px', border: '1px solid #ffedd5' }}>
+                <span style={{ display: 'block', fontSize: '9px', color: '#ea580c', fontWeight: 'bold', textTransform: 'uppercase' }}>CHƯA ĐÓNG</span>
+                <span style={{ fontSize: '20px', fontWeight: '900', color: '#9a3412' }}>{studentDetailStats.unpaidCount}</span>
+                <p style={{ fontSize: '7px', color: '#c2410c', marginTop: '4px', lineHeight: '1.2' }}>{studentDetailStats.unpaidLabels || 'Đã hoàn thành'}</p>
               </div>
             </div>
 
@@ -972,7 +714,6 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
                 </ResponsiveContainer>
               </div>
             </div>
-
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '40px', paddingTop: '20px', borderTop: '1px dashed #cbd5e1' }}>
               <div style={{ textAlign: 'center', width: '40%' }}>
                 <p style={{ fontSize: '14px', fontWeight: 'bold', margin: '0' }}>PHỤ HUYNH XÁC NHẬN</p>
@@ -985,13 +726,101 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
                 <p style={{ fontSize: '11px', color: '#059669', fontWeight: 'bold' }}>✓ Đã phê duyệt điện tử</p>
               </div>
             </div>
-            
             <div style={{ textAlign: 'center', marginTop: '40px', fontSize: '10px', color: '#94a3b8', fontStyle: 'italic' }}>
               Báo cáo được khởi tạo tự động bởi Hệ Thống Quản Lý Hoà Hiệp AI
             </div>
           </div>
         </div>
       )}
+
+      {/* Class Report JPEG Template */}
+      <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+        <div ref={classJpegTemplateRef} style={{ width: '1200px', padding: '50px', backgroundColor: '#ffffff', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+          <div style={{ textAlign: 'center', marginBottom: '40px', borderBottom: '5px solid #1e3a8a', paddingBottom: '20px' }}>
+            <h1 style={{ fontSize: '42px', color: '#1e3a8a', margin: '0', textTransform: 'uppercase', fontWeight: '900' }}>Báo Cáo Tổng Quan Học Tập</h1>
+            <p style={{ color: '#475569', fontSize: '20px', marginTop: '10px' }}>Thời gian: Tháng {currentMonth} Năm {currentYear}</p>
+            <p style={{ color: '#94a3b8', fontSize: '14px', marginTop: '5px' }}>Đơn vị: Trung tâm Hoà Hiệp AI | Ngày xuất: {today.toLocaleDateString('vi-VN')}</p>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '40px' }}>
+            <div style={{ background: '#f1f5f9', padding: '25px', borderRadius: '20px', textAlign: 'center', border: '1px solid #e2e8f0' }}>
+              <span style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase' }}>Sĩ số nhóm</span>
+              <span style={{ fontSize: '48px', fontWeight: '900', color: '#1e3a8a' }}>{students.length}</span>
+            </div>
+            <div style={{ background: '#ecfdf5', padding: '25px', borderRadius: '20px', textAlign: 'center', border: '1px solid #d1fae5' }}>
+              <span style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#059669', textTransform: 'uppercase' }}>Đã đóng phí</span>
+              <span style={{ fontSize: '48px', fontWeight: '900', color: '#065f46' }}>{classStats.paidThisMonth.length}</span>
+            </div>
+            <div style={{ background: '#fef2f2', padding: '25px', borderRadius: '20px', textAlign: 'center', border: '1px solid #fee2e2' }}>
+              <span style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#dc2626', textTransform: 'uppercase' }}>Chuẩn bị đóng</span>
+              <span style={{ fontSize: '48px', fontWeight: '900', color: '#991b1b' }}>{classStats.unpaidThisMonth.length}</span>
+            </div>
+            <div style={{ background: '#fff7ed', padding: '25px', borderRadius: '20px', textAlign: 'center', border: '1px solid #ffedd5' }}>
+              <span style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#ea580c', textTransform: 'uppercase' }}>Nợ phí cũ</span>
+              <span style={{ fontSize: '48px', fontWeight: '900', color: '#9a3412' }}>{classStats.debtors.length}</span>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '40px' }}>
+            <h3 style={{ fontSize: '20px', color: '#1e3a8a', borderLeft: '10px solid #1e3a8a', paddingLeft: '20px', marginBottom: '20px', fontWeight: '900' }}>DANH SÁCH CHI TIẾT THEO TÌNH TRẠNG PHÍ</h3>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <thead>
+                <tr style={{ background: '#1e3a8a', color: '#fff' }}>
+                  <th style={{ border: '1px solid #e2e8f0', padding: '12px', textAlign: 'left' }}>Họ tên học sinh</th>
+                  <th style={{ border: '1px solid #e2e8f0', padding: '12px' }}>Nhóm</th>
+                  <th style={{ border: '1px solid #e2e8f0', padding: '12px' }}>Bắt đầu</th>
+                  <th style={{ border: '1px solid #e2e8f0', padding: '12px' }}>Đã học</th>
+                  <th style={{ border: '1px solid #e2e8f0', padding: '12px' }}>Vắng</th>
+                  <th style={{ border: '1px solid #e2e8f0', padding: '12px' }}>SĐT</th>
+                  <th style={{ border: '1px solid #e2e8f0', padding: '12px' }}>Tình trạng phí (Tháng {currentMonth})</th>
+                </tr>
+              </thead>
+              <tbody>
+                {students.map((s, i) => {
+                  const isPaid = classStats.paidThisMonth.includes(s);
+                  const debt = classStats.debtors.find(d => d.student === s);
+                  const attended = calculateAttended(s);
+                  const vắng = (s['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).length;
+                  
+                  let statusText = 'Chưa đóng phí';
+                  let statusColor = '#dc2626'; // Red for Unpaid current
+                  
+                  if (isPaid) {
+                    statusText = 'Đã hoàn thành ✓';
+                    statusColor = '#059669'; // Emerald for Paid
+                  } else if (debt) {
+                    statusText = `Nợ: ${debt.unpaidMonths.join(', ')}`;
+                    statusColor = '#ea580c'; // Orange for Old Debt
+                  }
+
+                  return (
+                    <tr key={i}>
+                      <td style={{ border: '1px solid #e2e8f0', padding: '12px', fontWeight: 'bold' }}>{s['HỌ TÊN HS']}</td>
+                      <td style={{ border: '1px solid #e2e8f0', padding: '12px', textAlign: 'center' }}>{s['KHỐI']}</td>
+                      <td style={{ border: '1px solid #e2e8f0', padding: '12px', textAlign: 'center' }}>{formatDateVN(s['NGÀY BẮT ĐẦU'])}</td>
+                      <td style={{ border: '1px solid #e2e8f0', padding: '12px', textAlign: 'center', color: '#059669', fontWeight: 'bold' }}>{attended}</td>
+                      <td style={{ border: '1px solid #e2e8f0', padding: '12px', textAlign: 'center', color: '#dc2626', fontWeight: 'bold' }}>{vắng}</td>
+                      <td style={{ border: '1px solid #e2e8f0', padding: '12px', textAlign: 'center' }}>{s['SỐ ĐIỆN THOẠI 1']}</td>
+                      <td style={{ border: '1px solid #e2e8f0', padding: '12px', textAlign: 'center', color: statusColor, fontWeight: 'bold' }}>
+                        {statusText}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '60px' }}>
+            <div style={{ textAlign: 'center', width: '300px' }}>
+              <p style={{ fontWeight: 'bold', fontSize: '18px', margin: '0' }}>NGƯỜI LẬP BÁO CÁO</p>
+              <div style={{ height: '80px' }}></div>
+              <p style={{ fontWeight: '900', fontSize: '24px', color: '#1e3a8a', margin: '0' }}>LÊ HOÀ HIỆP</p>
+              <p style={{ fontSize: '12px', color: '#94a3b8' }}>(Đã xác thực chữ ký điện tử)</p>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Main UI */}
       <div className="bg-white p-8 rounded-2xl shadow-xl border border-blue-50">
@@ -1002,18 +831,18 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
           </h2>
           <div className="flex gap-3">
             <button 
-              onClick={exportClassReport}
-              disabled={isExporting}
-              className="bg-blue-700 hover:bg-blue-800 text-white px-5 py-3 rounded-xl font-black text-[11px] shadow-lg flex items-center gap-2 transition-all active:scale-95 disabled:bg-gray-400"
-            >
-              PDF HD
-            </button>
-            <button 
               onClick={exportClassReportWord}
               disabled={isExporting}
               className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-3 rounded-xl font-black text-[11px] shadow-lg flex items-center gap-2 transition-all active:scale-95 disabled:bg-gray-400"
             >
               Word
+            </button>
+            <button 
+              onClick={exportClassReportJPG}
+              disabled={isExporting}
+              className="bg-amber-600 hover:bg-amber-700 text-white px-5 py-3 rounded-xl font-black text-[11px] shadow-lg flex items-center gap-2 transition-all active:scale-95 disabled:bg-gray-400"
+            >
+              JPEG
             </button>
           </div>
         </div>
@@ -1052,7 +881,6 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
               {classStats.paidThisMonth.length === 0 && <span className="text-gray-400 font-bold text-xs italic">Chưa có ai hoàn thành học phí tháng này.</span>}
             </div>
           </div>
-
           <div>
             <h3 className="text-[11px] font-black text-red-500 uppercase mb-3 tracking-wider flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
@@ -1067,7 +895,6 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
               {classStats.unpaidThisMonth.length === 0 && <span className="text-emerald-600 font-bold text-xs">Tất cả đã hoàn thành! ✅</span>}
             </div>
           </div>
-
           <div>
             <h3 className="text-[11px] font-black text-orange-500 uppercase mb-3 tracking-wider flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
@@ -1095,7 +922,6 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
           <span className="w-2 h-8 bg-blue-600 rounded-full"></span>
           Báo cáo cá nhân
         </h2>
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           <div className="relative">
             <span className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -1124,8 +950,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
             </select>
           </div>
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-8">
           <div className="md:col-span-2 lg:col-span-2">
             <select 
               className="w-full p-4 border border-gray-200 rounded-xl font-bold text-gray-700 bg-white outline-none focus:ring-2 focus:ring-blue-500 shadow-md"
@@ -1138,15 +963,6 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
               ))}
             </select>
           </div>
-          <button
-            onClick={exportStudentReport}
-            disabled={!selectedStudent || isExporting}
-            className={`flex items-center justify-center gap-2 px-4 py-4 rounded-xl font-black transition-all shadow-lg active:scale-95 ${
-              selectedStudent && !isExporting ? 'bg-blue-700 text-white hover:bg-blue-800' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-            }`}
-          >
-            PDF HD
-          </button>
           <button
             onClick={exportStudentReportWord}
             disabled={!selectedStudent || isExporting}
@@ -1166,7 +982,6 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
             JPEG
           </button>
         </div>
-
         {selectedStudent && studentDetailStats && (
           <div ref={studentReportRef} className="grid grid-cols-1 lg:grid-cols-2 gap-10 animate-slideUp bg-white p-2 rounded-2xl">
             <div className="space-y-6">
@@ -1207,13 +1022,9 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
                 <p className="text-sm font-bold text-orange-800">{studentDetailStats.unpaidLabels || "Đã hoàn thành đầy đủ!"}</p>
               </div>
             </div>
-
-            <div 
-              ref={chartRef}
-              className="bg-white p-6 rounded-2xl border border-gray-200 min-h-[350px]"
-            >
+            <div className="bg-white p-6 rounded-2xl border border-gray-200 min-h-[350px]">
               <p className="text-[10px] font-black text-gray-400 uppercase mb-6 tracking-widest text-center">Biểu đồ chuyên cần (Buổi/Tháng)</p>
-              <div className="h-[280px] w-full">
+              <div className="h-[280px] w-full recharts-responsive-container">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={studentDetailStats.chartData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
