@@ -9,6 +9,15 @@ interface StudentFormProps {
   teacherSchedules?: TeacherSchedule[];
 }
 
+// Hàm chuẩn hoá ngày an toàn để tránh nhảy ngày do múi giờ
+const cleanDateStr = (val: any): string => {
+  if (!val) return '';
+  const dateObj = new Date(val);
+  if (isNaN(dateObj.getTime())) return String(val).split(/[T ]/)[0];
+  // toLocaleDateString('en-CA') luôn trả về YYYY-MM-DD dựa trên giờ địa phương
+  return dateObj.toLocaleDateString('en-CA');
+};
+
 const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title, teacherSchedules = [] }) => {
   const [formData, setFormData] = useState<Partial<Student>>({
     'HỌ TÊN HS': '',
@@ -16,7 +25,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
     'TÊN LỚP': '',
     'SỐ ĐIỆN THOẠI 1': '',
     'SỐ ĐIỆN THOẠI 2': '',
-    'NGÀY BẮT ĐẦU': new Date().toISOString().split('T')[0],
+    'NGÀY BẮT ĐẦU': cleanDateStr(new Date()),
     'LỊCH HỌC': '',
     'ĐIỂM DANH HS': '',
     'ĐÓNG HỌC PHÍ': '',
@@ -29,7 +38,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
     if (initialData) {
       const sanitized = { ...initialData };
       if (sanitized['NGÀY BẮT ĐẦU']) {
-        sanitized['NGÀY BẮT ĐẦU'] = String(sanitized['NGÀY BẮT ĐẦU']).split(/[T ]/)[0];
+        sanitized['NGÀY BẮT ĐẦU'] = cleanDateStr(sanitized['NGÀY BẮT ĐẦU']);
       }
       
       const khoiValue = String(sanitized['KHỐI'] || '');
@@ -104,14 +113,14 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
     }
 
     const teacherDates = (teacherSched['NGÀY DẠY TRONG THÁNG'] || '').split(' ').filter(d => d);
-    const validDates = teacherDates.filter(d => d >= (startDate as string)).map(d => d.split(/[T ]/)[0]);
+    const validDates = teacherDates.filter(d => d >= (startDate as string)).map(d => cleanDateStr(d));
 
     if (validDates.length === 0) {
       alert("Lịch dạy của giáo viên nhóm này không có ngày nào sau ngày bắt đầu của học sinh!");
       return;
     }
 
-    const currentSchedule = (formData['LỊCH HỌC'] || '').split(' ').filter(d => d).map(d => d.split(/[T ]/)[0]);
+    const currentSchedule = (formData['LỊCH HỌC'] || '').split(' ').filter(d => d).map(d => cleanDateStr(d));
     const combined = Array.from(new Set([...currentSchedule, ...validDates])).sort();
 
     setFormData(prev => ({ ...prev, 'LỊCH HỌC': combined.join(' ') }));
@@ -126,7 +135,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
   const firstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
 
   const toggleDate = (dateStr: string, field: 'LỊCH HỌC' | 'ĐIỂM DANH HS') => {
-    const currentVal = (formData[field] || '').split(' ').filter(d => d).map(d => d.split(/[T ]/)[0]);
+    const currentVal = (formData[field] || '').split(' ').filter(d => d).map(d => cleanDateStr(d));
     let newVal;
     if (currentVal.includes(dateStr)) {
       newVal = currentVal.filter(d => d !== dateStr);
@@ -141,17 +150,15 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
     
     const submissionData = { ...formData };
     
-    // Đảm bảo các trường ngày luôn ở định dạng YYYY-MM-DD thuần tuý
-    if (submissionData['NGÀY BẮT ĐẦU']) {
-      submissionData['NGÀY BẮT ĐẦU'] = String(submissionData['NGÀY BẮT ĐẦU']).split(/[T ]/)[0];
-    }
+    // Đảm bảo các trường ngày luôn ở định dạng YYYY-MM-DD chuẩn hoá
+    submissionData['NGÀY BẮT ĐẦU'] = cleanDateStr(submissionData['NGÀY BẮT ĐẦU']);
     
     if (submissionData['LỊCH HỌC']) {
-      submissionData['LỊCH HỌC'] = submissionData['LỊCH HỌC'].split(' ').filter(d => d).map(d => d.split(/[T ]/)[0]).join(' ');
+      submissionData['LỊCH HỌC'] = submissionData['LỊCH HỌC'].split(' ').filter(d => d).map(d => cleanDateStr(d)).join(' ');
     }
     
     if (submissionData['ĐIỂM DANH HS']) {
-      submissionData['ĐIỂM DANH HS'] = submissionData['ĐIỂM DANH HS'].split(' ').filter(d => d).map(d => d.split(/[T ]/)[0]).join(' ');
+      submissionData['ĐIỂM DANH HS'] = submissionData['ĐIỂM DANH HS'].split(' ').filter(d => d).map(d => cleanDateStr(d)).join(' ');
     }
     
     if (isDroppedOut) {
@@ -163,9 +170,9 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
     onSubmit(submissionData);
   };
 
-  const scheduleArray = (formData['LỊCH HỌC'] || '').split(' ').filter(d => d).map(d => d.split(/[T ]/)[0]);
-  const absenceArray = (formData['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).map(d => d.split(/[T ]/)[0]);
-  const todayStr = new Date().toISOString().split('T')[0];
+  const scheduleArray = (formData['LỊCH HỌC'] || '').split(' ').filter(d => d).map(d => cleanDateStr(d));
+  const absenceArray = (formData['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).map(d => cleanDateStr(d));
+  const todayStr = cleanDateStr(new Date());
   const attendedCount = scheduleArray.filter(d => d <= todayStr && !absenceArray.includes(d)).length;
   const selectedCount = scheduleArray.length;
 
@@ -174,7 +181,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
     const month = viewDateObj.getMonth();
     const days = daysInMonth(year, month);
     const startDay = firstDayOfMonth(year, month);
-    const today = new Date().toISOString().split('T')[0];
+    const today = cleanDateStr(new Date());
 
     const calendarCells = [];
     for (let i = 0; i < startDay; i++) {
@@ -183,7 +190,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
 
     for (let day = 1; day <= days; day++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      const currentVal = (formData[field] || '').split(' ').filter(d => d).map(d => d.split(/[T ]/)[0]);
+      const currentVal = (formData[field] || '').split(' ').filter(d => d).map(d => cleanDateStr(d));
       const isSelected = currentVal.includes(dateStr);
       const isToday = dateStr === today;
       
@@ -306,7 +313,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1.5">SỐ ĐIỆN THOẠI 1 (Zalo)</label>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5">SỐ ĐIỆY THOẠI 1 (Zalo)</label>
                 <input 
                   name="SỐ ĐIỆN THOẠI 1" 
                   value={formData['SỐ ĐIỆN THOẠI 1']} 

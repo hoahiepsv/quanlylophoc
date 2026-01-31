@@ -8,17 +8,26 @@ interface AttendanceProps {
   onRefresh: () => Promise<void>;
 }
 
+// Hàm chuẩn hoá ngày an toàn để tránh nhảy ngày do múi giờ
+const cleanDateStr = (val: any): string => {
+  if (!val) return '';
+  const dateObj = new Date(val);
+  if (isNaN(dateObj.getTime())) return String(val).split(/[T ]/)[0];
+  // toLocaleDateString('en-CA') luôn trả về YYYY-MM-DD dựa trên giờ địa phương
+  return dateObj.toLocaleDateString('en-CA');
+};
+
 const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState(false);
   const [filterKhoi, setFilterKhoi] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
+  const [attendanceDate, setAttendanceDate] = useState(cleanDateStr(new Date()));
 
   useEffect(() => {
     const currentAbsences = new Set<number>();
     students.forEach(s => {
-      const dbAbsences = (s['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).map(d => d.split(/[T ]/)[0]);
+      const dbAbsences = (s['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).map(d => cleanDateStr(d));
       if (s.rowIndex && dbAbsences.includes(attendanceDate)) {
         currentAbsences.add(s.rowIndex);
       }
@@ -80,21 +89,22 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
   const handleSaveAttendance = async () => {
     const updates = students.map(student => {
       const isNowAbsent = selectedIds.has(student.rowIndex!);
-      const currentAbsencesList = (student['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).map(d => d.split(/[T ]/)[0]);
+      const currentAbsencesList = (student['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).map(d => cleanDateStr(d));
       const wasAbsentInDB = currentAbsencesList.includes(attendanceDate);
       
       if (isNowAbsent === wasAbsentInDB) return null;
 
       let newAbsencesStr;
-      const cleanTargetDate = attendanceDate.split(/[T ]/)[0];
+      const cleanTargetDate = attendanceDate;
       if (isNowAbsent) {
         newAbsencesStr = Array.from(new Set([...currentAbsencesList, cleanTargetDate])).sort().join(' ');
       } else {
         newAbsencesStr = currentAbsencesList.filter(d => d !== cleanTargetDate).join(' ');
       }
 
-      // TUYỆT ĐỐI KHÔNG BIẾN ĐỔI NGÀY BẮT ĐẦU SANG DATE, GIỮ NGUYÊN CHUỖI VĂN BẢN
-      const cleanedStartDate = String(student['NGÀY BẮT ĐẦU'] || '').split(/[T ]/)[0];
+      // TUYỆT ĐỐI KHÔNG BIẾN ĐỔI NGÀY BẮT ĐẦU SANG DATE SAI MÚI GIỜ
+      // Sử dụng cleanDateStr để đảm bảo giữ nguyên giá trị ngày đã có từ API
+      const cleanedStartDate = cleanDateStr(student['NGÀY BẮT ĐẦU']);
       
       return {
         rowIndex: student.rowIndex,
@@ -189,7 +199,7 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
         {filteredStudents.map((student) => {
           const isSelected = selectedIds.has(student.rowIndex!);
-          const dbAbsencesClean = (student['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).map(d => d.split(/[T ]/)[0]);
+          const dbAbsencesClean = (student['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).map(d => cleanDateStr(d));
           const wasAbsentInDB = dbAbsencesClean.includes(attendanceDate);
 
           return (
