@@ -9,18 +9,15 @@ interface AttendanceProps {
 }
 
 const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
-  // selectedIds lưu trữ rowIndex của những học sinh ĐANG ĐƯỢC CHỌN LÀ VẮNG MẶT
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState(false);
   const [filterKhoi, setFilterKhoi] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
   const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
 
-  // Đồng bộ selectedIds với dữ liệu từ database khi ngày hoặc danh sách học sinh thay đổi
   useEffect(() => {
     const currentAbsences = new Set<number>();
     students.forEach(s => {
-      // Làm sạch dữ liệu điểm danh hiện có để so sánh chính xác
       const dbAbsences = (s['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).map(d => d.split(/[T ]/)[0]);
       if (s.rowIndex && dbAbsences.includes(attendanceDate)) {
         currentAbsences.add(s.rowIndex);
@@ -35,7 +32,6 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
   }, [attendanceDate]);
 
   const systemStats = useMemo(() => {
-    // Thống kê dựa trên trạng thái hiện tại trong selectedIds (chưa lưu hoặc đã lưu)
     const allAbsent = Array.from(selectedIds).length;
     const allStudents = students.length;
     
@@ -82,26 +78,22 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
   };
 
   const handleSaveAttendance = async () => {
-    // Tìm những học sinh có thay đổi so với database
     const updates = students.map(student => {
       const isNowAbsent = selectedIds.has(student.rowIndex!);
-      
-      // Làm sạch dữ liệu từ DB để so sánh
       const currentAbsencesList = (student['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).map(d => d.split(/[T ]/)[0]);
       const wasAbsentInDB = currentAbsencesList.includes(attendanceDate);
       
-      if (isNowAbsent === wasAbsentInDB) return null; // Không có thay đổi
+      if (isNowAbsent === wasAbsentInDB) return null;
 
       let newAbsencesStr;
+      const cleanTargetDate = attendanceDate.split(/[T ]/)[0];
       if (isNowAbsent) {
-        // Thêm ngày vắng mới (đảm bảo chỉ lấy phần YYYY-MM-DD)
-        newAbsencesStr = Array.from(new Set([...currentAbsencesList, attendanceDate.split(/[T ]/)[0]])).sort().join(' ');
+        newAbsencesStr = Array.from(new Set([...currentAbsencesList, cleanTargetDate])).sort().join(' ');
       } else {
-        // Xóa ngày vắng
-        newAbsencesStr = currentAbsencesList.filter(d => d !== attendanceDate).join(' ');
+        newAbsencesStr = currentAbsencesList.filter(d => d !== cleanTargetDate).join(' ');
       }
 
-      // Chuẩn hoá ngày bắt đầu để bảo vệ dữ liệu, không làm thay đổi giá trị ngày
+      // TUYỆT ĐỐI KHÔNG BIẾN ĐỔI NGÀY BẮT ĐẦU SANG DATE, GIỮ NGUYÊN CHUỖI VĂN BẢN
       const cleanedStartDate = String(student['NGÀY BẮT ĐẦU'] || '').split(/[T ]/)[0];
       
       return {
@@ -109,7 +101,7 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
         data: { 
           ...student, 
           'ĐIỂM DANH HS': newAbsencesStr,
-          'NGÀY BẮT ĐẦU': cleanedStartDate // Giữ nguyên ngày nhưng xoá phần ISO time suffix
+          'NGÀY BẮT ĐẦU': cleanedStartDate 
         }
       };
     }).filter(item => item !== null);
@@ -119,7 +111,7 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
       return;
     }
 
-    if (!confirm(`Xác nhận cập nhật điểm danh cho ${updates.length} học sinh có thay đổi vào ngày ${dateDisplay}?`)) return;
+    if (!confirm(`Xác nhận cập nhật điểm danh cho ${updates.length} học sinh?`)) return;
 
     setSaving(true);
     try {
@@ -139,7 +131,6 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
 
   return (
     <div className="space-y-4 animate-fadeIn pb-24 md:pb-8">
-      {/* Header */}
       <div className="bg-white p-4 rounded-2xl shadow-sm border border-blue-50">
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
@@ -168,7 +159,6 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
         </div>
       </div>
 
-      {/* Tìm kiếm & Lọc */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div className="relative">
           <span className="absolute inset-y-0 left-0 flex items-center pl-3">
@@ -196,11 +186,9 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
         </select>
       </div>
 
-      {/* Danh sách học sinh */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
         {filteredStudents.map((student) => {
           const isSelected = selectedIds.has(student.rowIndex!);
-          // Kiểm tra xem trong DB (đã làm sạch) có chứa ngày này không
           const dbAbsencesClean = (student['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).map(d => d.split(/[T ]/)[0]);
           const wasAbsentInDB = dbAbsencesClean.includes(attendanceDate);
 
@@ -214,7 +202,6 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
                 : 'bg-white border-white hover:border-blue-100 shadow-sm'
               }`}
             >
-              {/* Icon Trạng thái */}
               <div className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center ${
                 isSelected ? 'bg-red-600 text-white' : 'bg-blue-100 text-blue-600'
               }`}>
@@ -227,7 +214,6 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
                 )}
               </div>
 
-              {/* Thông tin học sinh */}
               <div className="flex-grow min-w-0">
                 <h4 className={`text-xs font-black truncate ${isSelected ? 'text-red-900' : 'text-gray-800'}`}>
                   {student['HỌ TÊN HS']}
@@ -242,7 +228,6 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
                 </div>
               </div>
 
-              {/* Badge Trạng thái Database */}
               {wasAbsentInDB && !isSelected && (
                 <span className="text-[8px] font-black text-orange-400 uppercase bg-orange-50 px-1.5 py-0.5 rounded border border-orange-100">Bỏ vắng?</span>
               )}
@@ -257,16 +242,6 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
         })}
       </div>
 
-      {filteredStudents.length === 0 && (
-        <div className="py-20 text-center text-gray-300 flex flex-col items-center">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 mb-2 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-          </svg>
-          <p className="text-[10px] font-black uppercase tracking-widest opacity-30">Không tìm thấy học sinh</p>
-        </div>
-      )}
-
-      {/* Nút lưu lơ lửng cho Mobile */}
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-xs px-4 z-[60]">
         <button
           onClick={handleSaveAttendance}
