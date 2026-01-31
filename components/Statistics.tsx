@@ -137,7 +137,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
     
     const nowStr = today.toISOString().split('T')[0];
     const attendedCount = calculateAttended(selectedStudent);
-    const totalSessionsCount = schedule.filter(d => d <= nowStr).length;
+    const totalSessionsInMonth = schedule.filter(d => d <= nowStr).length;
     
     const required = getRequiredMonths(selectedStudent['NGÀY BẮT ĐẦU']);
     const unpaidMonths = required.filter(m => !fees.includes(m));
@@ -157,7 +157,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
     })).slice(-12);
 
     return {
-      totalSessionsCount,
+      totalSessionsInMonth,
       attendedCount,
       absencesCount: absences.length,
       absenceDates: absences,
@@ -630,7 +630,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
         useCORS: true,
         backgroundColor: '#ffffff',
         logging: false,
-        width: 1200,
+        width: 1200, // Wider to accommodate more columns
       });
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
       const link = document.createElement('a');
@@ -672,7 +672,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px', marginBottom: '30px' }}>
               <div style={{ textAlign: 'center', padding: '12px', background: '#f1f5f9', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                 <span style={{ display: 'block', fontSize: '9px', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>BUỔI DẠY</span>
-                <span style={{ fontSize: '20px', fontWeight: '900', color: '#1e293b' }}>{studentDetailStats.totalSessionsCount}</span>
+                <span style={{ fontSize: '20px', fontWeight: '900', color: '#1e293b' }}>{studentDetailStats.totalSessionsInMonth}</span>
                 <span style={{ display: 'block', fontSize: '8px', color: '#94a3b8', marginTop: '4px' }}>Tổng buổi lịch</span>
               </div>
               <div style={{ textAlign: 'center', padding: '12px', background: '#ecfdf5', borderRadius: '12px', border: '1px solid #d1fae5' }}>
@@ -767,11 +767,11 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
               <thead>
                 <tr style={{ background: '#1e3a8a', color: '#fff' }}>
                   <th style={{ border: '1px solid #e2e8f0', padding: '12px', textAlign: 'left' }}>Họ tên học sinh</th>
-                  <th style={{ border: '1px solid #e2e8f0', padding: '12px' }}>Nhóm</th>
+                  <th style={{ border: '1px solid #e2e8f0', padding: '12px' }}>Nhóm - Lớp</th>
                   <th style={{ border: '1px solid #e2e8f0', padding: '12px' }}>Bắt đầu</th>
                   <th style={{ border: '1px solid #e2e8f0', padding: '12px' }}>Đã học</th>
                   <th style={{ border: '1px solid #e2e8f0', padding: '12px' }}>Vắng</th>
-                  <th style={{ border: '1px solid #e2e8f0', padding: '12px' }}>SĐT</th>
+                  <th style={{ border: '1px solid #e2e8f0', padding: '12px' }}>SĐT liên hệ</th>
                   <th style={{ border: '1px solid #e2e8f0', padding: '12px' }}>Tình trạng phí (Tháng {currentMonth})</th>
                 </tr>
               </thead>
@@ -779,27 +779,26 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
                 {students.map((s, i) => {
                   const isPaid = classStats.paidThisMonth.includes(s);
                   const debt = classStats.debtors.find(d => d.student === s);
-                  const attended = calculateAttended(s);
-                  const vắng = (s['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).length;
+                  const attendedCount = calculateAttended(s);
+                  const absenceCount = (s['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).length;
                   
                   let statusText = 'Chưa đóng phí';
-                  let statusColor = '#dc2626'; // Red for Unpaid current
-                  
+                  let statusColor = '#dc2626'; // Red
                   if (isPaid) {
                     statusText = 'Đã hoàn thành ✓';
-                    statusColor = '#059669'; // Emerald for Paid
+                    statusColor = '#059669'; // Emerald
                   } else if (debt) {
-                    statusText = `Nợ: ${debt.unpaidMonths.join(', ')}`;
-                    statusColor = '#ea580c'; // Orange for Old Debt
+                    statusText = `Nợ cũ: ${debt.unpaidMonths.join(', ')}`;
+                    statusColor = '#ea580c'; // Orange
                   }
 
                   return (
                     <tr key={i}>
                       <td style={{ border: '1px solid #e2e8f0', padding: '12px', fontWeight: 'bold' }}>{s['HỌ TÊN HS']}</td>
-                      <td style={{ border: '1px solid #e2e8f0', padding: '12px', textAlign: 'center' }}>{s['KHỐI']}</td>
+                      <td style={{ border: '1px solid #e2e8f0', padding: '12px', textAlign: 'center' }}>{s['KHỐI']} - {s['TÊN LỚP']}</td>
                       <td style={{ border: '1px solid #e2e8f0', padding: '12px', textAlign: 'center' }}>{formatDateVN(s['NGÀY BẮT ĐẦU'])}</td>
-                      <td style={{ border: '1px solid #e2e8f0', padding: '12px', textAlign: 'center', color: '#059669', fontWeight: 'bold' }}>{attended}</td>
-                      <td style={{ border: '1px solid #e2e8f0', padding: '12px', textAlign: 'center', color: '#dc2626', fontWeight: 'bold' }}>{vắng}</td>
+                      <td style={{ border: '1px solid #e2e8f0', padding: '12px', textAlign: 'center', fontWeight: 'bold', color: '#059669' }}>{attendedCount}</td>
+                      <td style={{ border: '1px solid #e2e8f0', padding: '12px', textAlign: 'center', fontWeight: 'bold', color: '#dc2626' }}>{absenceCount}</td>
                       <td style={{ border: '1px solid #e2e8f0', padding: '12px', textAlign: 'center' }}>{s['SỐ ĐIỆN THOẠI 1']}</td>
                       <td style={{ border: '1px solid #e2e8f0', padding: '12px', textAlign: 'center', color: statusColor, fontWeight: 'bold' }}>
                         {statusText}
