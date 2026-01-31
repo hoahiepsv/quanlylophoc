@@ -29,7 +29,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
     if (initialData) {
       const sanitized = { ...initialData };
       if (sanitized['NGÀY BẮT ĐẦU']) {
-        sanitized['NGÀY BẮT ĐẦU'] = sanitized['NGÀY BẮT ĐẦU'].split(/[T ]/)[0];
+        sanitized['NGÀY BẮT ĐẦU'] = String(sanitized['NGÀY BẮT ĐẦU']).split(/[T ]/)[0];
       }
       
       const khoiValue = String(sanitized['KHỐI'] || '');
@@ -104,14 +104,14 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
     }
 
     const teacherDates = (teacherSched['NGÀY DẠY TRONG THÁNG'] || '').split(' ').filter(d => d);
-    const validDates = teacherDates.filter(d => d >= startDate);
+    const validDates = teacherDates.filter(d => d >= (startDate as string)).map(d => d.split(/[T ]/)[0]);
 
     if (validDates.length === 0) {
       alert("Lịch dạy của giáo viên nhóm này không có ngày nào sau ngày bắt đầu của học sinh!");
       return;
     }
 
-    const currentSchedule = (formData['LỊCH HỌC'] || '').split(' ').filter(d => d);
+    const currentSchedule = (formData['LỊCH HỌC'] || '').split(' ').filter(d => d).map(d => d.split(/[T ]/)[0]);
     const combined = Array.from(new Set([...currentSchedule, ...validDates])).sort();
 
     setFormData(prev => ({ ...prev, 'LỊCH HỌC': combined.join(' ') }));
@@ -126,7 +126,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
   const firstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
 
   const toggleDate = (dateStr: string, field: 'LỊCH HỌC' | 'ĐIỂM DANH HS') => {
-    const currentVal = (formData[field] || '').split(' ').filter(d => d);
+    const currentVal = (formData[field] || '').split(' ').filter(d => d).map(d => d.split(/[T ]/)[0]);
     let newVal;
     if (currentVal.includes(dateStr)) {
       newVal = currentVal.filter(d => d !== dateStr);
@@ -140,6 +140,20 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
     e.preventDefault();
     
     const submissionData = { ...formData };
+    
+    // Đảm bảo các trường ngày luôn ở định dạng YYYY-MM-DD thuần tuý
+    if (submissionData['NGÀY BẮT ĐẦU']) {
+      submissionData['NGÀY BẮT ĐẦU'] = String(submissionData['NGÀY BẮT ĐẦU']).split(/[T ]/)[0];
+    }
+    
+    if (submissionData['LỊCH HỌC']) {
+      submissionData['LỊCH HỌC'] = submissionData['LỊCH HỌC'].split(' ').filter(d => d).map(d => d.split(/[T ]/)[0]).join(' ');
+    }
+    
+    if (submissionData['ĐIỂM DANH HS']) {
+      submissionData['ĐIỂM DANH HS'] = submissionData['ĐIỂM DANH HS'].split(' ').filter(d => d).map(d => d.split(/[T ]/)[0]).join(' ');
+    }
+    
     if (isDroppedOut) {
       submissionData['KHỐI'] = "Đã thôi học";
     } else if (isTutoring) {
@@ -149,9 +163,8 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
     onSubmit(submissionData);
   };
 
-  // Tính toán số buổi đã học và đã chọn
-  const scheduleArray = (formData['LỊCH HỌC'] || '').split(' ').filter(d => d);
-  const absenceArray = (formData['ĐIỂM DANH HS'] || '').split(' ').filter(d => d);
+  const scheduleArray = (formData['LỊCH HỌC'] || '').split(' ').filter(d => d).map(d => d.split(/[T ]/)[0]);
+  const absenceArray = (formData['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).map(d => d.split(/[T ]/)[0]);
   const todayStr = new Date().toISOString().split('T')[0];
   const attendedCount = scheduleArray.filter(d => d <= todayStr && !absenceArray.includes(d)).length;
   const selectedCount = scheduleArray.length;
@@ -170,7 +183,8 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
 
     for (let day = 1; day <= days; day++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      const isSelected = (formData[field] || '').includes(dateStr);
+      const currentVal = (formData[field] || '').split(' ').filter(d => d).map(d => d.split(/[T ]/)[0]);
+      const isSelected = currentVal.includes(dateStr);
       const isToday = dateStr === today;
       
       let baseStyle = "h-10 border rounded-lg flex flex-col items-center justify-center text-xs transition-all transform active:scale-90 ";
@@ -251,7 +265,6 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
                 </div>
               </div>
 
-              {/* Ô stick Trạng thái đặc biệt */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 flex items-center justify-between">
                   <div>

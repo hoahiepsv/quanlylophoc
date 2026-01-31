@@ -20,7 +20,9 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
   useEffect(() => {
     const currentAbsences = new Set<number>();
     students.forEach(s => {
-      if (s.rowIndex && (s['ĐIỂM DANH HS'] || '').includes(attendanceDate)) {
+      // Làm sạch dữ liệu điểm danh hiện có để so sánh chính xác
+      const dbAbsences = (s['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).map(d => d.split(/[T ]/)[0]);
+      if (s.rowIndex && dbAbsences.includes(attendanceDate)) {
         currentAbsences.add(s.rowIndex);
       }
     });
@@ -83,24 +85,32 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
     // Tìm những học sinh có thay đổi so với database
     const updates = students.map(student => {
       const isNowAbsent = selectedIds.has(student.rowIndex!);
-      const wasAbsentInDB = (student['ĐIỂM DANH HS'] || '').includes(attendanceDate);
+      
+      // Làm sạch dữ liệu từ DB để so sánh
+      const currentAbsencesList = (student['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).map(d => d.split(/[T ]/)[0]);
+      const wasAbsentInDB = currentAbsencesList.includes(attendanceDate);
       
       if (isNowAbsent === wasAbsentInDB) return null; // Không có thay đổi
 
-      const currentAbsencesList = (student['ĐIỂM DANH HS'] || '').split(' ').filter(d => d);
       let newAbsencesStr;
-      
       if (isNowAbsent) {
-        // Thêm ngày vắng mới
-        newAbsencesStr = [...currentAbsencesList, attendanceDate].sort().join(' ');
+        // Thêm ngày vắng mới (đảm bảo chỉ lấy phần YYYY-MM-DD)
+        newAbsencesStr = Array.from(new Set([...currentAbsencesList, attendanceDate.split(/[T ]/)[0]])).sort().join(' ');
       } else {
         // Xóa ngày vắng
         newAbsencesStr = currentAbsencesList.filter(d => d !== attendanceDate).join(' ');
       }
+
+      // Chuẩn hoá ngày bắt đầu để bảo vệ dữ liệu, không làm thay đổi giá trị ngày
+      const cleanedStartDate = String(student['NGÀY BẮT ĐẦU'] || '').split(/[T ]/)[0];
       
       return {
         rowIndex: student.rowIndex,
-        data: { ...student, 'ĐIỂM DANH HS': newAbsencesStr }
+        data: { 
+          ...student, 
+          'ĐIỂM DANH HS': newAbsencesStr,
+          'NGÀY BẮT ĐẦU': cleanedStartDate // Giữ nguyên ngày nhưng xoá phần ISO time suffix
+        }
       };
     }).filter(item => item !== null);
 
@@ -190,7 +200,9 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
         {filteredStudents.map((student) => {
           const isSelected = selectedIds.has(student.rowIndex!);
-          const wasAbsentInDB = (student['ĐIỂM DANH HS'] || '').includes(attendanceDate);
+          // Kiểm tra xem trong DB (đã làm sạch) có chứa ngày này không
+          const dbAbsencesClean = (student['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).map(d => d.split(/[T ]/)[0]);
+          const wasAbsentInDB = dbAbsencesClean.includes(attendanceDate);
 
           return (
             <div 
