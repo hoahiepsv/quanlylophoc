@@ -776,7 +776,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
               </div>
             </div>
             <div style={{ textAlign: 'center', marginTop: '40px', fontSize: '10px', color: '#94a3b8', fontStyle: 'italic' }}>
-              Báo cáo được khởi tạo tự động bởi Hệ Thống Quản Lý Hoà Hiệp AI
+              Phần mềm được thiết kế bởi Lê Hoà Hiệp
             </div>
           </div>
         </div>
