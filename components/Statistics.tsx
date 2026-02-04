@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useRef } from 'react';
 import { Student } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
@@ -146,8 +145,14 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
     
     const nowStr = cleanDateStr(today);
     const attendedCount = calculateAttended(selectedStudent);
-    const totalSessionsInMonth = schedule.filter(d => d <= nowStr).length;
+    const totalSessionsInMonth = schedule.filter(d => {
+      const dObj = new Date(d);
+      return dObj.getMonth() + 1 === currentMonth && dObj.getFullYear() === currentYear && d <= nowStr;
+    }).length;
     
+    // Tổng số buổi dự kiến là tổng tất cả các ngày trong lịch học từ ngày bắt đầu
+    const totalExpectedSessions = schedule.length;
+
     const required = getRequiredMonths(selectedStudent['NGÀY BẮT ĐẦU']);
     const unpaidMonths = required.filter(m => !fees.includes(m));
 
@@ -167,6 +172,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
 
     return {
       totalSessionsInMonth,
+      totalExpectedSessions,
       attendedCount,
       absencesCount: absences.length,
       absenceDates: absences,
@@ -176,7 +182,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
       unpaidLabels: unpaidMonths.join(', '),
       chartData
     };
-  }, [selectedStudent, today]);
+  }, [selectedStudent, today, currentMonth, currentYear]);
 
   // HÀM SAO LƯU EXCEL
   const exportBackupExcel = () => {
@@ -552,9 +558,16 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
                 }),
                 new TableRow({
                   children: [
+                    new TableCell({ children: [new Paragraph({ text: "Tổng số buổi dự kiến", font: WORD_FONT, size: WORD_SIZE })] }),
+                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${studentDetailStats.totalExpectedSessions} buổi`, bold: true, font: WORD_FONT, size: WORD_SIZE })] })] }),
+                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, text: "Từ khi tham gia đến hết lịch", font: WORD_FONT, size: WORD_SIZE })] }),
+                  ],
+                }),
+                new TableRow({
+                  children: [
                     new TableCell({ children: [new Paragraph({ text: "Số buổi học thực tế", font: WORD_FONT, size: WORD_SIZE })] }),
                     new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${studentDetailStats.attendedCount} buổi`, bold: true, font: WORD_FONT, size: WORD_SIZE })] })] }),
-                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, text: `Từ ${formatDateVN(selectedStudent['NGÀY BẮT ĐẦU'])}`, font: WORD_FONT, size: WORD_SIZE })] }),
+                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, text: `Tính đến ngày ${today.toLocaleDateString('vi-VN')}`, font: WORD_FONT, size: WORD_SIZE })] }),
                   ],
                 }),
                 new TableRow({
@@ -718,31 +731,49 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
               </div>
             </div>
 
+            {/* Thông số báo cáo - Đã cập nhật theo thứ tự: Dự kiến, Đã học, Vắng, Đóng phí, Nợ phí */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px', marginBottom: '30px' }}>
-              <div style={{ textAlign: 'center', padding: '12px', background: '#f1f5f9', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                <span style={{ display: 'block', fontSize: '9px', color: '#64748b', fontWeight: 'bold', textTransform: 'uppercase' }}>BUỔI DẠY</span>
-                <span style={{ fontSize: '20px', fontWeight: '900', color: '#1e293b' }}>{studentDetailStats.totalSessionsInMonth}</span>
-                <span style={{ display: 'block', fontSize: '8px', color: '#94a3b8', marginTop: '4px' }}>Tổng buổi lịch</span>
+              {/* Ô 1: Dự kiến */}
+              <div style={{ textAlign: 'center', padding: '12px', background: '#fef9c3', borderRadius: '12px', border: '1px solid #fde047', height: '100px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <span style={{ display: 'block', fontSize: '10px', color: '#854d0e', fontWeight: 'bold', textTransform: 'uppercase' }}>DỰ KIẾN</span>
+                <span style={{ fontSize: '20px', fontWeight: '900', color: '#713f12' }}>{studentDetailStats.totalExpectedSessions}</span>
+                <span style={{ display: 'block', fontSize: '8px', color: '#a16207', marginTop: '4px' }}>Buổi dự kiến</span>
               </div>
-              <div style={{ textAlign: 'center', padding: '12px', background: '#ecfdf5', borderRadius: '12px', border: '1px solid #d1fae5' }}>
-                <span style={{ display: 'block', fontSize: '9px', color: '#059669', fontWeight: 'bold', textTransform: 'uppercase' }}>ĐÃ HỌC</span>
+              
+              {/* Ô 2: Đã học */}
+              <div style={{ textAlign: 'center', padding: '12px', background: '#ecfdf5', borderRadius: '12px', border: '1px solid #d1fae5', height: '100px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <span style={{ display: 'block', fontSize: '10px', color: '#059669', fontWeight: 'bold', textTransform: 'uppercase' }}>ĐÃ HỌC</span>
                 <span style={{ fontSize: '20px', fontWeight: '900', color: '#065f46' }}>{studentDetailStats.attendedCount}</span>
-                <span style={{ display: 'block', fontSize: '8px', color: '#059669', marginTop: '4px' }}>Chuyên cần</span>
+                <span style={{ display: 'block', fontSize: '8px', color: '#059669', marginTop: '4px' }}>Thực tế học</span>
               </div>
-              <div style={{ textAlign: 'center', padding: '12px', background: '#fef2f2', borderRadius: '12px', border: '1px solid #fee2e2' }}>
-                <span style={{ display: 'block', fontSize: '9px', color: '#dc2626', fontWeight: 'bold', textTransform: 'uppercase' }}>VẮNG MẶT</span>
+
+              {/* Ô 3: Vắng */}
+              <div style={{ textAlign: 'center', padding: '12px', background: '#fef2f2', borderRadius: '12px', border: '1px solid #fee2e2', height: '100px', display: 'flex', flexDirection: 'column', justifyContent: 'center', overflow: 'hidden' }}>
+                <span style={{ display: 'block', fontSize: '10px', color: '#dc2626', fontWeight: 'bold', textTransform: 'uppercase' }}>VẮNG</span>
                 <span style={{ fontSize: '20px', fontWeight: '900', color: '#991b1b' }}>{studentDetailStats.absencesCount}</span>
-                <p style={{ fontSize: '7px', color: '#b91c1c', marginTop: '4px', lineHeight: '1.2' }}>{studentDetailStats.absenceDates.map(d => formatDateVN(d).split('/')[0] + '/' + formatDateVN(d).split('/')[1]).join(', ') || 'Không vắng'}</p>
+                <p style={{ fontSize: '7px', color: '#b91c1c', marginTop: '4px', lineHeight: '1.2', fontWeight: '500' }}>
+                  {studentDetailStats.absenceDates.length > 0 
+                    ? studentDetailStats.absenceDates.map(d => formatDateVN(d).split('/')[0] + '/' + formatDateVN(d).split('/')[1]).join(', ') 
+                    : 'Không vắng'}
+                </p>
               </div>
-              <div style={{ textAlign: 'center', padding: '12px', background: '#eff6ff', borderRadius: '12px', border: '1px solid #dbeafe' }}>
-                <span style={{ display: 'block', fontSize: '9px', color: '#2563eb', fontWeight: 'bold', textTransform: 'uppercase' }}>ĐÓNG PHÍ</span>
+
+              {/* Ô 4: Đóng phí */}
+              <div style={{ textAlign: 'center', padding: '12px', background: '#eff6ff', borderRadius: '12px', border: '1px solid #dbeafe', height: '100px', display: 'flex', flexDirection: 'column', justifyContent: 'center', overflow: 'hidden' }}>
+                <span style={{ display: 'block', fontSize: '10px', color: '#2563eb', fontWeight: 'bold', textTransform: 'uppercase' }}>ĐÓNG PHÍ</span>
                 <span style={{ fontSize: '20px', fontWeight: '900', color: '#1e40af' }}>{studentDetailStats.paidCount}</span>
-                <p style={{ fontSize: '7px', color: '#1d4ed8', marginTop: '4px', lineHeight: '1.2' }}>{studentDetailStats.paidMonths.join(', ') || 'Chưa đóng'}</p>
+                <p style={{ fontSize: '7px', color: '#1d4ed8', marginTop: '4px', lineHeight: '1.2', fontWeight: '500' }}>
+                  {studentDetailStats.paidMonths.length > 0 ? studentDetailStats.paidMonths.join(', ') : 'Chưa đóng'}
+                </p>
               </div>
-              <div style={{ textAlign: 'center', padding: '12px', background: '#fff7ed', borderRadius: '12px', border: '1px solid #ffedd5' }}>
-                <span style={{ display: 'block', fontSize: '9px', color: '#ea580c', fontWeight: 'bold', textTransform: 'uppercase' }}>CHƯA ĐÓNG</span>
+
+              {/* Ô 5: Nợ phí */}
+              <div style={{ textAlign: 'center', padding: '12px', background: '#fff7ed', borderRadius: '12px', border: '1px solid #ffedd5', height: '100px', display: 'flex', flexDirection: 'column', justifyContent: 'center', overflow: 'hidden' }}>
+                <span style={{ display: 'block', fontSize: '10px', color: '#ea580c', fontWeight: 'bold', textTransform: 'uppercase' }}>NỢ PHÍ</span>
                 <span style={{ fontSize: '20px', fontWeight: '900', color: '#9a3412' }}>{studentDetailStats.unpaidCount}</span>
-                <p style={{ fontSize: '7px', color: '#c2410c', marginTop: '4px', lineHeight: '1.2' }}>{studentDetailStats.unpaidLabels || 'Đã hoàn thành'}</p>
+                <p style={{ fontSize: '7px', color: '#c2410c', marginTop: '4px', lineHeight: '1.2', fontWeight: 'bold' }}>
+                  {studentDetailStats.unpaidLabels || 'Hoàn thành ✓'}
+                </p>
               </div>
             </div>
 
@@ -782,7 +813,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
         </div>
       )}
 
-      {/* Class Report JPEG Template */}
+      {/* Class Report JPEG Template (remains similar) */}
       <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
         <div ref={classJpegTemplateRef} style={{ width: '1200px', padding: '50px', backgroundColor: '#ffffff', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
           <div style={{ textAlign: 'center', marginBottom: '40px', borderBottom: '5px solid #1e3a8a', paddingBottom: '20px' }}>
@@ -1046,6 +1077,11 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
           <div ref={studentReportRef} className="grid grid-cols-1 lg:grid-cols-2 gap-10 animate-slideUp bg-white p-2 rounded-2xl">
             <div className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
+                <div className="bg-blue-900 p-5 rounded-2xl border border-blue-800 text-white shadow-lg">
+                  <p className="text-[10px] font-black text-blue-300 uppercase mb-1">Tổng số buổi dự kiến</p>
+                  <p className="text-xl font-black">{studentDetailStats.totalExpectedSessions} buổi</p>
+                  <p className="text-[9px] mt-1 opacity-60">Toàn bộ lộ trình học</p>
+                </div>
                 <div className="bg-slate-50 p-5 rounded-2xl border border-gray-100">
                   <p className="text-[10px] font-black text-gray-400 uppercase mb-1">Ngày bắt đầu</p>
                   <p className="text-lg font-bold text-blue-900">{formatDateVN(selectedStudent['NGÀY BẮT ĐẦU'])}</p>
@@ -1076,10 +1112,10 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
                     ))}
                   </div>
                 </div>
-              </div>
-              <div className="bg-orange-50 p-6 rounded-2xl border border-orange-100">
-                <p className="text-[10px] font-black text-orange-400 uppercase mb-2 tracking-widest">Tháng chuẩn bị đóng học phí</p>
-                <p className="text-sm font-bold text-orange-800">{studentDetailStats.unpaidLabels || "Đã hoàn thành đầy đủ!"}</p>
+                <div className="bg-orange-50 p-5 rounded-2xl border border-orange-100 flex flex-col justify-center">
+                  <p className="text-[10px] font-black text-orange-400 uppercase mb-1 tracking-widest">Cần hoàn thành</p>
+                  <p className="text-xs font-bold text-orange-800 leading-tight">{studentDetailStats.unpaidLabels || "Đã xong ✅"}</p>
+                </div>
               </div>
             </div>
             <div className="bg-white p-6 rounded-2xl border border-gray-200 min-h-[350px]">
