@@ -82,7 +82,11 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
     const schedule = (student['LỊCH HỌC'] || '').split(' ').filter(d => d).map(d => cleanDateStr(d));
     const absences = (student['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).map(d => cleanDateStr(d));
     const nowStr = cleanDateStr(today);
-    return schedule.filter(d => d <= nowStr && !absences.includes(d)).length;
+    return schedule.filter(d => d <= nowStr).length;
+  };
+
+  const calculateAbsences = (student: Student) => {
+    return (student['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).length;
   };
 
   const classStats = useMemo(() => {
@@ -357,7 +361,8 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
                   new TableCell({ shading: { fill: "f8fafc" }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Họ tên học sinh", bold: true, font: WORD_FONT, size: 20 })] })] }),
                   new TableCell({ shading: { fill: "f8fafc" }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Nhóm", bold: true, font: WORD_FONT, size: 20 })] })] }),
                   new TableCell({ shading: { fill: "f8fafc" }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Bắt đầu", bold: true, font: WORD_FONT, size: 20 })] })] }),
-                  new TableCell({ shading: { fill: "f8fafc" }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Số buổi", bold: true, font: WORD_FONT, size: 20 })] })] }),
+                  new TableCell({ shading: { fill: "f8fafc" }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Số buổi dạy", bold: true, font: WORD_FONT, size: 20 })] })] }),
+                  new TableCell({ shading: { fill: "f8fafc" }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Vắng", bold: true, font: WORD_FONT, size: 20 })] })] }),
                   new TableCell({ shading: { fill: "f8fafc" }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "SĐT", bold: true, font: WORD_FONT, size: 20 })] })] }),
                   new TableCell({ shading: { fill: "f8fafc" }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: isDebt ? "Tháng nợ" : "Ghi chú", bold: true, font: WORD_FONT, size: 20 })] })] }),
                 ],
@@ -371,6 +376,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
                     new TableCell({ verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, text: s['TÊN LỚP'], font: WORD_FONT, size: 20 })] }),
                     new TableCell({ verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, text: formatDateVN(s['NGÀY BẮT ĐẦU']), font: WORD_FONT, size: 20 })] }),
                     new TableCell({ verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${calculateAttended(s)}`, bold: true, color: "2563eb", font: WORD_FONT, size: 20 })] })] }),
+                    new TableCell({ verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${calculateAbsences(s)}`, bold: true, color: "dc2626", font: WORD_FONT, size: 20 })] })] }),
                     new TableCell({ verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, text: s['SỐ ĐIỆN THOẠI 1'], font: WORD_FONT, size: 20 })] }),
                     new TableCell({ verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: isDebt ? unpaid : '', color: isDebt ? "dc2626" : "000000", font: WORD_FONT, size: 18 })] })] }),
                   ],
@@ -565,7 +571,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
                 }),
                 new TableRow({
                   children: [
-                    new TableCell({ children: [new Paragraph({ text: "Số buổi học thực tế", font: WORD_FONT, size: WORD_SIZE })] }),
+                    new TableCell({ children: [new Paragraph({ text: "Số buổi đã dạy", font: WORD_FONT, size: WORD_SIZE })] }),
                     new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${studentDetailStats.attendedCount} buổi`, bold: true, font: WORD_FONT, size: WORD_SIZE })] })] }),
                     new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, text: `Tính đến ngày ${today.toLocaleDateString('vi-VN')}`, font: WORD_FONT, size: WORD_SIZE })] }),
                   ],
@@ -740,11 +746,11 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
                 <span style={{ display: 'block', fontSize: '8px', color: '#a16207', marginTop: '4px' }}>Buổi dự kiến</span>
               </div>
               
-              {/* Ô 2: Đã học */}
+              {/* Ô 2: Đã dạy */}
               <div style={{ textAlign: 'center', padding: '12px', background: '#ecfdf5', borderRadius: '12px', border: '1px solid #d1fae5', height: '100px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                <span style={{ display: 'block', fontSize: '10px', color: '#059669', fontWeight: 'bold', textTransform: 'uppercase' }}>ĐÃ HỌC</span>
+                <span style={{ display: 'block', fontSize: '10px', color: '#059669', fontWeight: 'bold', textTransform: 'uppercase' }}>ĐÃ DẠY</span>
                 <span style={{ fontSize: '20px', fontWeight: '900', color: '#065f46' }}>{studentDetailStats.attendedCount}</span>
-                <span style={{ display: 'block', fontSize: '8px', color: '#059669', marginTop: '4px' }}>Thực tế học</span>
+                <span style={{ display: 'block', fontSize: '8px', color: '#059669', marginTop: '4px' }}>Số buổi đã dạy</span>
               </div>
 
               {/* Ô 3: Vắng */}
@@ -849,7 +855,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
                   <th style={{ border: '1px solid #e2e8f0', padding: '12px', textAlign: 'left' }}>Họ tên học sinh</th>
                   <th style={{ border: '1px solid #e2e8f0', padding: '12px' }}>Nhóm - Lớp</th>
                   <th style={{ border: '1px solid #e2e8f0', padding: '12px' }}>Bắt đầu</th>
-                  <th style={{ border: '1px solid #e2e8f0', padding: '12px' }}>Đã học</th>
+                  <th style={{ border: '1px solid #e2e8f0', padding: '12px' }}>Đã dạy</th>
                   <th style={{ border: '1px solid #e2e8f0', padding: '12px' }}>Vắng</th>
                   <th style={{ border: '1px solid #e2e8f0', padding: '12px' }}>SĐT liên hệ</th>
                   <th style={{ border: '1px solid #e2e8f0', padding: '12px' }}>Tình trạng phí (Tháng {currentMonth})</th>
@@ -1087,8 +1093,8 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
                   <p className="text-lg font-bold text-blue-900">{formatDateVN(selectedStudent['NGÀY BẮT ĐẦU'])}</p>
                 </div>
                 <div className="bg-slate-50 p-5 rounded-2xl border border-gray-100">
-                  <p className="text-[10px] font-black text-gray-400 uppercase mb-1">Số buổi đã học</p>
-                  <p className="text-lg font-bold text-emerald-600">{studentDetailStats.attendedCount}</p>
+                  <p className="text-[10px] font-black text-gray-400 uppercase mb-1">Số buổi đã dạy</p>
+                  <p className="text-lg font-bold text-emerald-600">{studentDetailStats.attendedCount} buổi</p>
                 </div>
                 <div className="bg-slate-50 p-5 rounded-2xl border border-gray-100">
                   <p className="text-[10px] font-black text-gray-400 uppercase mb-1">Số buổi vắng</p>

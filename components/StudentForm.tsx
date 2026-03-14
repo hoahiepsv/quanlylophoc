@@ -124,7 +124,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
     const combined = Array.from(new Set([...currentSchedule, ...validDates])).sort();
 
     setFormData(prev => ({ ...prev, 'LỊCH HỌC': combined.join(' ') }));
-    alert(`Đã tự động thêm ${validDates.length} buổi học dựa trên lịch dạy Nhóm ${selectedKhoi}!`);
+    alert(`Đã tự động thêm ${validDates.length} buổi dạy dựa trên lịch dạy Nhóm ${selectedKhoi}!`);
   };
 
   const handleClearSchedule = () => {
@@ -173,7 +173,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
   const scheduleArray = (formData['LỊCH HỌC'] || '').split(' ').filter(d => d).map(d => cleanDateStr(d));
   const absenceArray = (formData['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).map(d => cleanDateStr(d));
   const todayStr = cleanDateStr(new Date());
-  const attendedCount = scheduleArray.filter(d => d <= todayStr && !absenceArray.includes(d)).length;
+  const attendedCount = scheduleArray.filter(d => d <= todayStr).length;
   const selectedCount = scheduleArray.length;
 
   const renderCalendar = (field: 'LỊCH HỌC' | 'ĐIỂM DANH HS', viewDateObj: Date) => {
@@ -349,7 +349,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
                 <div className="flex justify-between items-center w-full">
                   <span>LỊCH HỌC</span>
                   <div className="flex gap-3">
-                    <span className="text-emerald-600 lowercase font-medium">Đã học: {attendedCount} buổi</span>
+                    <span className="text-emerald-600 lowercase font-medium">Đã dạy: {attendedCount} buổi</span>
                     <span className="text-blue-600 lowercase font-medium">Đã chọn: {selectedCount} buổi</span>
                   </div>
                 </div>

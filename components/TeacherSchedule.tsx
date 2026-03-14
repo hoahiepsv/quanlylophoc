@@ -185,7 +185,7 @@ const TeacherScheduleComponent: React.FC = () => {
               
               <div className="mt-6 flex items-center gap-4 text-[10px] font-bold text-gray-400 uppercase">
                 <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 bg-blue-600 rounded-sm"></div> Ngày có tiết dạy
+                  <div className="w-3 h-3 bg-blue-600 rounded-sm"></div> Ngày có buổi dạy
                 </div>
                 <div className="flex items-center gap-1">
                   <div className="w-3 h-3 bg-white border border-gray-200 rounded-sm"></div> Ngày nghỉ
