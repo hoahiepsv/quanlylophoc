@@ -62,7 +62,7 @@ const App: React.FC = () => {
     const absences = (student['ĐIỂM DANH HS'] || '').split(' ').filter(d => d);
     const nowStr = new Date().toISOString().split('T')[0];
     
-    const attended = schedule.filter(d => d <= nowStr && !absences.includes(d)).length;
+    const attended = schedule.filter(d => d <= nowStr).length;
     const vắng = absences.length;
     
     return { attended, vắng };
