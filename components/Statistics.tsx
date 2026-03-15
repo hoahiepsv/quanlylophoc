@@ -4,6 +4,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import html2canvas from 'html2canvas';
 import { geminiService } from '../services/geminiService';
 import * as XLSX from 'xlsx';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 import { 
   Document, 
   Packer, 
@@ -33,6 +35,7 @@ const cleanDateStr = (val: any): string => {
 
 const Statistics: React.FC<StatisticsProps> = ({ students }) => {
   const [selectedStudentName, setSelectedStudentName] = useState<string>('');
+  const [selectedStudentNames, setSelectedStudentNames] = useState<string[]>([]);
   const [reportSearchTerm, setReportSearchTerm] = useState('');
   const [reportFilterGrade, setReportFilterGrade] = useState('');
   const [isExporting, setIsExporting] = useState(false);
@@ -140,24 +143,20 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
     return students.find(s => s['HỌ TÊN HS'] === selectedStudentName);
   }, [selectedStudentName, students]);
 
-  const studentDetailStats = useMemo(() => {
-    if (!selectedStudent) return null;
-
-    const fees = (selectedStudent['ĐÓNG HỌC PHÍ'] || '').split(' ').filter(f => f);
-    const schedule = (selectedStudent['LỊCH HỌC'] || '').split(' ').filter(d => d).map(d => cleanDateStr(d));
-    const absences = (selectedStudent['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).map(d => cleanDateStr(d)).sort();
+  const getStudentDetailStats = (student: Student) => {
+    const fees = (student['ĐÓNG HỌC PHÍ'] || '').split(' ').filter(f => f);
+    const schedule = (student['LỊCH HỌC'] || '').split(' ').filter(d => d).map(d => cleanDateStr(d));
+    const absences = (student['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).map(d => cleanDateStr(d)).sort();
     
     const nowStr = cleanDateStr(today);
-    const attendedCount = calculateAttended(selectedStudent);
+    const attendedCount = calculateAttended(student);
     const totalSessionsInMonth = schedule.filter(d => {
       const dObj = new Date(d);
       return dObj.getMonth() + 1 === currentMonth && dObj.getFullYear() === currentYear && d <= nowStr;
     }).length;
     
-    // Tổng số buổi dự kiến là tổng tất cả các ngày trong lịch học từ ngày bắt đầu
     const totalExpectedSessions = schedule.length;
-
-    const required = getRequiredMonths(selectedStudent['NGÀY BẮT ĐẦU']);
+    const required = getRequiredMonths(student['NGÀY BẮT ĐẦU']);
     const unpaidMonths = required.filter(m => !fees.includes(m));
 
     const monthlyMap: Record<string, number> = {};
@@ -186,6 +185,11 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
       unpaidLabels: unpaidMonths.join(', '),
       chartData
     };
+  };
+
+  const studentDetailStats = useMemo(() => {
+    if (!selectedStudent) return null;
+    return getStudentDetailStats(selectedStudent);
   }, [selectedStudent, today, currentMonth, currentYear]);
 
   // HÀM SAO LƯU EXCEL
@@ -432,233 +436,299 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
     if (!selectedStudent || !studentDetailStats) return;
     setIsExporting(true);
     try {
-      const aiComment = await geminiService.generateReportContent('student', {
-        name: selectedStudent['HỌ TÊN HS'],
-        attended: studentDetailStats.attendedCount,
-        absences: studentDetailStats.absencesCount,
-        unpaidMonths: studentDetailStats.unpaidLabels
-      });
-
-      let chartBase64 = '';
-      if (studentReportRef.current) {
-        const chartElem = studentReportRef.current.querySelector('.recharts-responsive-container');
-        if (chartElem) {
-           const canvas = await html2canvas(chartElem as HTMLElement, { scale: 2, useCORS: true, logging: false });
-           chartBase64 = canvas.toDataURL('image/png').split(',')[1];
-        }
-      }
-
-      const doc = new Document({
-        sections: [{
-          properties: {},
-          children: [
-            new Paragraph({
-              alignment: AlignmentType.CENTER,
-              children: [
-                new TextRun({
-                  text: "PHIẾU THEO DÕI HỌC TẬP",
-                  bold: true,
-                  size: 36,
-                  font: WORD_FONT,
-                  color: "2563eb",
-                }),
-              ],
-              spacing: { after: 400 },
-            }),
-
-            new Table({
-              width: { size: 100, type: WidthType.PERCENTAGE },
-              borders: {
-                top: { style: BorderStyle.THICK, size: 24, color: "2563eb" },
-                bottom: { style: BorderStyle.THICK, size: 24, color: "2563eb" },
-                left: { style: BorderStyle.NONE },
-                right: { style: BorderStyle.NONE },
-                insideHorizontal: { style: BorderStyle.NONE },
-              },
-              rows: [
-                new TableRow({
-                  children: [
-                    new TableCell({
-                      children: [
-                        new Paragraph({
-                          children: [
-                            new TextRun({ text: "Họ và tên: ", bold: true, font: WORD_FONT, size: WORD_SIZE }),
-                            new TextRun({ text: selectedStudent['HỌ TÊN HS'], bold: true, font: WORD_FONT, size: 32, color: "1e3a8a" }),
-                          ],
-                        }),
-                        new Paragraph({
-                          children: [
-                            new TextRun({ text: `Lớp đào tạo: ${selectedStudent['TÊN LỚP']} (Nhóm ${selectedStudent['KHỐI']})`, font: WORD_FONT, size: WORD_SIZE }),
-                          ],
-                        }),
-                      ],
-                      width: { size: 60, type: WidthType.PERCENTAGE },
-                    }),
-                    new TableCell({
-                      children: [
-                        new Paragraph({
-                          alignment: AlignmentType.RIGHT,
-                          children: [
-                            new TextRun({ text: `Ngày tham gia: ${formatDateVN(selectedStudent['NGÀY BẮT ĐẦU'])}`, font: WORD_FONT, size: WORD_SIZE }),
-                          ],
-                        }),
-                        new Paragraph({
-                          alignment: AlignmentType.RIGHT,
-                          children: [
-                            new TextRun({ text: `Ngày in phiếu: ${today.toLocaleDateString('vi-VN')}`, font: WORD_FONT, size: WORD_SIZE }),
-                          ],
-                        }),
-                      ],
-                      width: { size: 40, type: WidthType.PERCENTAGE },
-                    }),
-                  ],
-                }),
-              ],
-            }),
-
-            new Paragraph({ spacing: { before: 400 } }),
-            new Table({
-              width: { size: 100, type: WidthType.PERCENTAGE },
-              rows: [
-                new TableRow({
-                  children: [
-                    new TableCell({
-                      shading: { fill: "f0f9ff" },
-                      margins: { top: 200, bottom: 200, left: 200, right: 200 },
-                      children: [
-                        new Paragraph({
-                          children: [
-                            new TextRun({ text: "LỜI NHẮN TỪ THẦY / CÔ:", bold: true, color: "0369a1", font: WORD_FONT, size: WORD_SIZE }),
-                          ],
-                          spacing: { after: 200 },
-                        }),
-                        new Paragraph({
-                          alignment: AlignmentType.JUSTIFY,
-                          children: [
-                            new TextRun({ text: `"${aiComment}"`, italics: true, font: WORD_FONT, size: WORD_SIZE }),
-                          ],
-                        }),
-                      ],
-                    }),
-                  ],
-                }),
-              ],
-            }),
-
-            new Paragraph({
-              spacing: { before: 400, after: 200 },
-              children: [
-                new TextRun({ text: "KẾT QUẢ CHUYÊN CẦN & HỌC PHÍ:", bold: true, font: WORD_FONT, size: 32, color: "1e3a8a" }),
-              ],
-            }),
-
-            new Table({
-              width: { size: 100, type: WidthType.PERCENTAGE },
-              rows: [
-                new TableRow({
-                  children: [
-                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "TIÊU CHÍ", bold: true, color: "ffffff", font: WORD_FONT, size: WORD_SIZE })] })], shading: { fill: "2563eb" } }),
-                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "KẾT QUẢ", bold: true, color: "ffffff", font: WORD_FONT, size: WORD_SIZE })] })], shading: { fill: "2563eb" } }),
-                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "CHI TIẾT", bold: true, color: "ffffff", font: WORD_FONT, size: WORD_SIZE })] })], shading: { fill: "2563eb" } }),
-                  ],
-                }),
-                new TableRow({
-                  children: [
-                    new TableCell({ children: [new Paragraph({ text: "Tổng số buổi dự kiến", font: WORD_FONT, size: WORD_SIZE })] }),
-                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${studentDetailStats.totalExpectedSessions} buổi`, bold: true, font: WORD_FONT, size: WORD_SIZE })] })] }),
-                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, text: "Từ khi tham gia đến hết lịch", font: WORD_FONT, size: WORD_SIZE })] }),
-                  ],
-                }),
-                new TableRow({
-                  children: [
-                    new TableCell({ children: [new Paragraph({ text: "Số buổi đã dạy", font: WORD_FONT, size: WORD_SIZE })] }),
-                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${studentDetailStats.attendedCount} buổi`, bold: true, font: WORD_FONT, size: WORD_SIZE })] })] }),
-                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, text: `Tính đến ngày ${today.toLocaleDateString('vi-VN')}`, font: WORD_FONT, size: WORD_SIZE })] }),
-                  ],
-                }),
-                new TableRow({
-                  children: [
-                    new TableCell({ children: [new Paragraph({ text: "Số buổi vắng mặt", font: WORD_FONT, size: WORD_SIZE })] }),
-                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${studentDetailStats.absencesCount} buổi`, bold: true, color: "dc2626", font: WORD_FONT, size: WORD_SIZE })] })] }),
-                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, text: studentDetailStats.absenceDates.map(d => formatDateVN(d)).join(', ') || 'Không vắng', font: WORD_FONT, size: WORD_SIZE })] }),
-                  ],
-                }),
-                new TableRow({
-                  children: [
-                    new TableCell({ children: [new Paragraph({ text: "Tháng đã đóng phí", font: WORD_FONT, size: WORD_SIZE })] }),
-                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${studentDetailStats.paidCount} tháng`, bold: true, font: WORD_FONT, size: WORD_SIZE })] })] }),
-                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, text: studentDetailStats.paidMonths.join(', ') || 'Chưa đóng', font: WORD_FONT, size: WORD_SIZE })] }),
-                  ],
-                }),
-                new TableRow({
-                  children: [
-                    new TableCell({ children: [new Paragraph({ text: "Tháng còn nợ phí", font: WORD_FONT, size: WORD_SIZE })] }),
-                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${studentDetailStats.unpaidCount} tháng`, bold: true, color: "dc2626", font: WORD_FONT, size: WORD_SIZE })] })] }),
-                    new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: studentDetailStats.unpaidLabels || 'Hoàn thành ✅', bold: true, font: WORD_FONT, size: WORD_SIZE })] })] }),
-                  ],
-                }),
-              ],
-            }),
-
-            new Paragraph({
-              spacing: { before: 400, after: 200 },
-              children: [
-                new TextRun({ text: "BIỂU ĐỒ CHUYÊN CẦN:", bold: true, font: WORD_FONT, size: 28, color: "1e3a8a" }),
-              ],
-            }),
-            ...(chartBase64 ? [
-              new Paragraph({
-                alignment: AlignmentType.CENTER,
-                children: [
-                  new ImageRun({
-                    data: Uint8Array.from(atob(chartBase64), c => c.charCodeAt(0)),
-                    transformation: { width: 500, height: 250 },
-                  }),
-                ],
-              })
-            ] : []),
-
-            new Paragraph({ spacing: { before: 600 } }),
-            new Table({
-              width: { size: 100, type: WidthType.PERCENTAGE },
-              borders: {
-                top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE },
-                insideHorizontal: { style: BorderStyle.NONE }, insideVertical: { style: BorderStyle.NONE },
-              },
-              rows: [
-                new TableRow({
-                  children: [
-                    new TableCell({
-                      children: [
-                        new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "XÁC NHẬN CỦA PHỤ HUYNH", bold: true, font: WORD_FONT, size: WORD_SIZE })] }),
-                        new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "(Ký và ghi rõ họ tên)", italics: true, font: WORD_FONT, size: 22 })] }),
-                      ],
-                    }),
-                    new TableCell({
-                      children: [
-                        new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "GIÁO VIÊN CHỦ NHIỆM", bold: true, font: WORD_FONT, size: WORD_SIZE })] }),
-                        new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "(Đã phê duyệt điện tử)", italics: true, font: WORD_FONT, size: 22 })] }),
-                        new Paragraph({ spacing: { before: 800 }, alignment: AlignmentType.CENTER, children: [new TextRun({ text: "LÊ HOÀ HIỆP", bold: true, font: WORD_FONT, size: 32 })] }),
-                      ],
-                    }),
-                  ],
-                }),
-              ],
-            }),
-          ],
-        }],
-      });
-
-      const blob = await Packer.toBlob(doc);
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `Phieu_Hoc_Tap_${selectedStudent['HỌ TÊN HS']}.docx`;
-      link.click();
-      URL.revokeObjectURL(url);
+      const blob = await generateStudentReportBlob(selectedStudent, studentDetailStats);
+      saveAs(blob, `Phieu_Hoc_Tap_${selectedStudent['HỌ TÊN HS']}.docx`);
     } catch (err) {
       console.error(err);
       alert("Lỗi khi tạo file Word.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const generateStudentReportBlob = async (student: Student, stats: any) => {
+    const aiComment = await geminiService.generateReportContent('student', {
+      name: student['HỌ TÊN HS'],
+      attended: stats.attendedCount,
+      absences: stats.absencesCount,
+      unpaidMonths: stats.unpaidLabels
+    });
+
+    let chartBase64 = '';
+    // Chỉ lấy chart nếu đang xem đúng học sinh đó trong preview
+    if (studentReportRef.current && selectedStudentName === student['HỌ TÊN HS']) {
+      const chartElem = studentReportRef.current.querySelector('.recharts-responsive-container');
+      if (chartElem) {
+        const canvas = await html2canvas(chartElem as HTMLElement, { scale: 2, useCORS: true, logging: false });
+        chartBase64 = canvas.toDataURL('image/png').split(',')[1];
+      }
+    }
+
+    const doc = new Document({
+      sections: [{
+        properties: {},
+        children: [
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            children: [
+              new TextRun({
+                text: "PHIẾU THEO DÕI HỌC TẬP",
+                bold: true,
+                size: 36,
+                font: WORD_FONT,
+                color: "2563eb",
+              }),
+            ],
+            spacing: { after: 400 },
+          }),
+
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            borders: {
+              top: { style: BorderStyle.THICK, size: 24, color: "2563eb" },
+              bottom: { style: BorderStyle.THICK, size: 24, color: "2563eb" },
+              left: { style: BorderStyle.NONE },
+              right: { style: BorderStyle.NONE },
+              insideHorizontal: { style: BorderStyle.NONE },
+            },
+            rows: [
+              new TableRow({
+                children: [
+                  new TableCell({
+                    children: [
+                      new Paragraph({
+                        children: [
+                          new TextRun({ text: "Họ và tên: ", bold: true, font: WORD_FONT, size: WORD_SIZE }),
+                          new TextRun({ text: student['HỌ TÊN HS'], bold: true, font: WORD_FONT, size: 32, color: "1e3a8a" }),
+                        ],
+                      }),
+                      new Paragraph({
+                        children: [
+                          new TextRun({ text: `Lớp đào tạo: ${student['TÊN LỚP']} (Nhóm ${student['KHỐI']})`, font: WORD_FONT, size: WORD_SIZE }),
+                        ],
+                      }),
+                    ],
+                    width: { size: 60, type: WidthType.PERCENTAGE },
+                  }),
+                  new TableCell({
+                    children: [
+                      new Paragraph({
+                        alignment: AlignmentType.RIGHT,
+                        children: [
+                          new TextRun({ text: `Ngày tham gia: ${formatDateVN(student['NGÀY BẮT ĐẦU'])}`, font: WORD_FONT, size: WORD_SIZE }),
+                        ],
+                      }),
+                      new Paragraph({
+                        alignment: AlignmentType.RIGHT,
+                        children: [
+                          new TextRun({ text: `Ngày in phiếu: ${today.toLocaleDateString('vi-VN')}`, font: WORD_FONT, size: WORD_SIZE }),
+                        ],
+                      }),
+                    ],
+                    width: { size: 40, type: WidthType.PERCENTAGE },
+                  }),
+                ],
+              }),
+            ],
+          }),
+
+          new Paragraph({ spacing: { before: 400 } }),
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [
+              new TableRow({
+                children: [
+                  new TableCell({
+                    shading: { fill: "f0f9ff" },
+                    margins: { top: 200, bottom: 200, left: 200, right: 200 },
+                    children: [
+                      new Paragraph({
+                        children: [
+                          new TextRun({ text: "LỜI NHẮN TỪ THẦY / CÔ:", bold: true, color: "0369a1", font: WORD_FONT, size: WORD_SIZE }),
+                        ],
+                        spacing: { after: 200 },
+                      }),
+                      new Paragraph({
+                        alignment: AlignmentType.JUSTIFY,
+                        children: [
+                          new TextRun({ text: `"${aiComment}"`, italics: true, font: WORD_FONT, size: WORD_SIZE }),
+                        ],
+                      }),
+                    ],
+                  }),
+                ],
+              }),
+            ],
+          }),
+
+          new Paragraph({
+            spacing: { before: 400, after: 200 },
+            children: [
+              new TextRun({ text: "KẾT QUẢ CHUYÊN CẦN & HỌC PHÍ:", bold: true, font: WORD_FONT, size: 32, color: "1e3a8a" }),
+            ],
+          }),
+
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [
+              new TableRow({
+                children: [
+                  new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "TIÊU CHÍ", bold: true, color: "ffffff", font: WORD_FONT, size: WORD_SIZE })] })], shading: { fill: "2563eb" } }),
+                  new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "KẾT QUẢ", bold: true, color: "ffffff", font: WORD_FONT, size: WORD_SIZE })] })], shading: { fill: "2563eb" } }),
+                  new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "CHI TIẾT", bold: true, color: "ffffff", font: WORD_FONT, size: WORD_SIZE })] })], shading: { fill: "2563eb" } }),
+                ],
+              }),
+              new TableRow({
+                children: [
+                  new TableCell({ children: [new Paragraph({ text: "Tổng số buổi dự kiến", font: WORD_FONT, size: WORD_SIZE })] }),
+                  new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${stats.totalExpectedSessions} buổi`, bold: true, font: WORD_FONT, size: WORD_SIZE })] })] }),
+                  new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, text: "Từ khi tham gia đến hết lịch", font: WORD_FONT, size: WORD_SIZE })] }),
+                ],
+              }),
+              new TableRow({
+                children: [
+                  new TableCell({ children: [new Paragraph({ text: "Số buổi đã dạy", font: WORD_FONT, size: WORD_SIZE })] }),
+                  new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${stats.attendedCount} buổi`, bold: true, font: WORD_FONT, size: WORD_SIZE })] })] }),
+                  new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, text: `Tính đến ngày ${today.toLocaleDateString('vi-VN')}`, font: WORD_FONT, size: WORD_SIZE })] }),
+                ],
+              }),
+              new TableRow({
+                children: [
+                  new TableCell({ children: [new Paragraph({ text: "Số buổi vắng mặt", font: WORD_FONT, size: WORD_SIZE })] }),
+                  new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${stats.absencesCount} buổi`, bold: true, color: "dc2626", font: WORD_FONT, size: WORD_SIZE })] })] }),
+                  new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, text: stats.absenceDates.map(d => formatDateVN(d)).join(', ') || 'Không vắng', font: WORD_FONT, size: WORD_SIZE })] }),
+                ],
+              }),
+              new TableRow({
+                children: [
+                  new TableCell({ children: [new Paragraph({ text: "Tháng đã đóng phí", font: WORD_FONT, size: WORD_SIZE })] }),
+                  new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${stats.paidCount} tháng`, bold: true, font: WORD_FONT, size: WORD_SIZE })] })] }),
+                  new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, text: stats.paidMonths.join(', ') || 'Chưa đóng', font: WORD_FONT, size: WORD_SIZE })] }),
+                ],
+              }),
+              new TableRow({
+                children: [
+                  new TableCell({ children: [new Paragraph({ text: "Tháng còn nợ phí", font: WORD_FONT, size: WORD_SIZE })] }),
+                  new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${stats.unpaidCount} tháng`, bold: true, color: "dc2626", font: WORD_FONT, size: WORD_SIZE })] })] }),
+                  new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: stats.unpaidLabels || 'Hoàn thành ✅', bold: true, font: WORD_FONT, size: WORD_SIZE })] })] }),
+                ],
+              }),
+            ],
+          }),
+
+          new Paragraph({
+            spacing: { before: 400, after: 200 },
+            children: [
+              new TextRun({ text: "BIỂU ĐỒ CHUYÊN CẦN:", bold: true, font: WORD_FONT, size: 28, color: "1e3a8a" }),
+            ],
+          }),
+          ...(chartBase64 ? [
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              children: [
+                new ImageRun({
+                  data: Uint8Array.from(atob(chartBase64), c => c.charCodeAt(0)),
+                  transformation: { width: 500, height: 250 },
+                }),
+              ],
+            })
+          ] : []),
+
+          new Paragraph({ spacing: { before: 600 } }),
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            borders: {
+              top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE },
+              insideHorizontal: { style: BorderStyle.NONE }, insideVertical: { style: BorderStyle.NONE },
+            },
+            rows: [
+              new TableRow({
+                children: [
+                  new TableCell({
+                    children: [
+                      new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "XÁC NHẬN CỦA PHỤ HUYNH", bold: true, font: WORD_FONT, size: WORD_SIZE })] }),
+                      new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "(Ký và ghi rõ họ tên)", italics: true, font: WORD_FONT, size: 22 })] }),
+                    ],
+                  }),
+                  new TableCell({
+                    children: [
+                      new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "GIÁO VIÊN CHỦ NHIỆM", bold: true, font: WORD_FONT, size: WORD_SIZE })] }),
+                      new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "(Đã phê duyệt điện tử)", italics: true, font: WORD_FONT, size: 22 })] }),
+                      new Paragraph({ spacing: { before: 800 }, alignment: AlignmentType.CENTER, children: [new TextRun({ text: "LÊ HOÀ HIỆP", bold: true, font: WORD_FONT, size: 32 })] }),
+                    ],
+                  }),
+                ],
+              }),
+            ],
+          }),
+        ],
+      }],
+    });
+
+    return await Packer.toBlob(doc);
+  };
+
+  const exportMultipleStudentReportsWord = async () => {
+    if (selectedStudentNames.length === 0) {
+      alert("Vui lòng chọn ít nhất một học sinh.");
+      return;
+    }
+    setIsExporting(true);
+    try {
+      const zip = new JSZip();
+      for (const name of selectedStudentNames) {
+        const student = students.find(s => s['HỌ TÊN HS'] === name);
+        if (!student) continue;
+        const stats = getStudentDetailStats(student);
+        const blob = await generateStudentReportBlob(student, stats);
+        zip.file(`Phieu_Hoc_Tap_${name}.docx`, blob);
+      }
+      const content = await zip.generateAsync({ type: "blob" });
+      saveAs(content, `Bao_Cao_Ca_Nhan_Word_${cleanDateStr(today)}.zip`);
+    } catch (err) {
+      console.error(err);
+      alert("Lỗi khi tạo file Word hàng loạt.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const exportMultipleStudentReportsJPG = async () => {
+    if (selectedStudentNames.length === 0) {
+      alert("Vui lòng chọn ít nhất một học sinh.");
+      return;
+    }
+    setIsExporting(true);
+    try {
+      const zip = new JSZip();
+      const originalSelected = selectedStudentName;
+      
+      for (const name of selectedStudentNames) {
+        setSelectedStudentName(name);
+        // Chờ React render lại template ẩn
+        await new Promise(resolve => setTimeout(resolve, 400));
+        
+        if (jpegTemplateRef.current) {
+          const canvas = await html2canvas(jpegTemplateRef.current, {
+            scale: 4, 
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            logging: false,
+            width: 800, 
+          });
+          const blob = await new Promise<Blob>((resolve) => canvas.toBlob(b => resolve(b!), 'image/jpeg', 0.95));
+          zip.file(`Bao_Cao_${name}.jpg`, blob);
+        }
+      }
+      
+      // Khôi phục lại học sinh đang xem ban đầu
+      setSelectedStudentName(originalSelected);
+      
+      const content = await zip.generateAsync({ type: "blob" });
+      saveAs(content, `Bao_Cao_Ca_Nhan_JPG_${cleanDateStr(today)}.zip`);
+    } catch (err) {
+      console.error(err);
+      alert("Lỗi khi tạo hình ảnh hàng loạt.");
     } finally {
       setIsExporting(false);
     }
@@ -1035,7 +1105,10 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
           <div className="relative">
             <select 
               value={reportFilterGrade}
-              onChange={(e) => setReportFilterGrade(e.target.value)}
+              onChange={(e) => {
+                setReportFilterGrade(e.target.value);
+                setSelectedStudentNames([]); // Reset selection when filter changes
+              }}
               className="w-full px-4 py-3 border border-gray-100 bg-slate-50/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm font-black text-[11px] text-blue-800 uppercase tracking-widest transition-all"
             >
               <option value="">Tất cả Nhóm</option>
@@ -1045,43 +1118,154 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
             </select>
           </div>
         </div>
-        <div className="flex flex-col md:grid md:grid-cols-4 lg:grid-cols-4 gap-3 mb-8">
-          <div className="md:col-span-2">
-            <select 
-              className="w-full p-4 border border-gray-200 rounded-xl font-bold text-gray-700 bg-white outline-none focus:ring-2 focus:ring-blue-500 shadow-md"
-              value={selectedStudentName}
-              onChange={(e) => setSelectedStudentName(e.target.value)}
-            >
-              <option value="">-- Kết quả: {filteredStudentsForReport.length} học sinh --</option>
+
+        <div className="mb-8 space-y-4">
+          <div className="border border-gray-200 rounded-2xl p-4 max-h-72 overflow-y-auto bg-white shadow-inner custom-scrollbar">
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-100 sticky top-0 bg-white z-10">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black text-blue-900 uppercase tracking-wider">Danh sách học sinh</span>
+                <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-[9px] font-black">{selectedStudentNames.length} / {filteredStudentsForReport.length}</span>
+              </div>
+              <button 
+                onClick={() => {
+                  if (selectedStudentNames.length === filteredStudentsForReport.length) {
+                    setSelectedStudentNames([]);
+                  } else {
+                    setSelectedStudentNames(filteredStudentsForReport.map(s => s['HỌ TÊN HS']));
+                  }
+                }}
+                className="text-[10px] font-black text-blue-600 uppercase hover:text-blue-800 transition-colors"
+              >
+                {selectedStudentNames.length === filteredStudentsForReport.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
               {filteredStudentsForReport.map((s, idx) => (
-                <option key={idx} value={s['HỌ TÊN HS']}>{s['HỌ TÊN HS']} (Nhóm {s['KHỐI']})</option>
+                <div 
+                  key={idx} 
+                  className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                    selectedStudentName === s['HỌ TÊN HS']
+                    ? 'bg-blue-50 border-blue-200 shadow-sm' 
+                    : 'bg-white border-gray-100 hover:bg-gray-50'
+                  }`}
+                >
+                  <div 
+                    className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all cursor-pointer ${
+                      selectedStudentNames.includes(s['HỌ TÊN HS']) 
+                      ? 'bg-blue-600 border-blue-600 text-white' 
+                      : 'bg-white border-gray-300'
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (selectedStudentNames.includes(s['HỌ TÊN HS'])) {
+                        setSelectedStudentNames(selectedStudentNames.filter(n => n !== s['HỌ TÊN HS']));
+                      } else {
+                        setSelectedStudentNames([...selectedStudentNames, s['HỌ TÊN HS']]);
+                      }
+                    }}
+                  >
+                    {selectedStudentNames.includes(s['HỌ TÊN HS']) && (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </div>
+                  <div 
+                    className="flex flex-col flex-grow cursor-pointer"
+                    onClick={() => setSelectedStudentName(s['HỌ TÊN HS'])}
+                  >
+                    <span className={`text-xs font-bold ${selectedStudentName === s['HỌ TÊN HS'] ? 'text-blue-900' : 'text-gray-700'}`}>
+                      {s['HỌ TÊN HS']}
+                    </span>
+                    <span className="text-[9px] text-gray-400 font-medium">Nhóm {s['KHỐI']} - {s['TÊN LỚP']}</span>
+                  </div>
+                  {selectedStudentName === s['HỌ TÊN HS'] && (
+                    <div className="ml-auto">
+                      <span className="bg-blue-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase">Đang xem</span>
+                    </div>
+                  )}
+                </div>
               ))}
-            </select>
+              {filteredStudentsForReport.length === 0 && (
+                <div className="col-span-full py-10 text-center text-gray-400 italic text-xs">
+                  Không tìm thấy học sinh phù hợp.
+                </div>
+              )}
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-2 md:col-span-2">
-            <button
-              onClick={exportStudentReportWord}
-              disabled={!selectedStudent || isExporting}
-              className={`flex items-center justify-center gap-2 px-4 py-4 rounded-xl font-black transition-all shadow-lg active:scale-95 uppercase ${
-                selectedStudent && !isExporting ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-              }`}
-            >
-              Word
-            </button>
-            <button
-              onClick={exportStudentReportJPG}
-              disabled={!selectedStudent || isExporting}
-              className={`flex items-center justify-center gap-2 px-4 py-4 rounded-xl font-black transition-all shadow-lg active:scale-95 uppercase ${
-                selectedStudent && !isExporting ? 'bg-amber-600 text-white hover:bg-amber-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-              }`}
-            >
-              JPEG
-            </button>
+
+          <div className="flex flex-col sm:flex-row gap-4 items-center justify-between bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
+            <div className="text-xs font-bold text-blue-800">
+              {selectedStudentNames.length > 0 
+                ? `Đã chọn ${selectedStudentNames.length} học sinh để xuất báo cáo` 
+                : "Vui lòng chọn học sinh để xuất báo cáo"}
+            </div>
+            <div className="flex gap-3 w-full sm:w-auto">
+              <button
+                onClick={exportMultipleStudentReportsWord}
+                disabled={selectedStudentNames.length === 0 || isExporting}
+                className={`flex-grow sm:flex-none flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-black transition-all shadow-lg active:scale-95 uppercase text-[11px] ${
+                  selectedStudentNames.length > 0 && !isExporting ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Xuất Word {selectedStudentNames.length > 1 ? `(${selectedStudentNames.length})` : ''}
+              </button>
+              <button
+                onClick={exportMultipleStudentReportsJPG}
+                disabled={selectedStudentNames.length === 0 || isExporting}
+                className={`flex-grow sm:flex-none flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-black transition-all shadow-lg active:scale-95 uppercase text-[11px] ${
+                  selectedStudentNames.length > 0 && !isExporting ? 'bg-amber-600 text-white hover:bg-amber-700' : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Xuất JPEG {selectedStudentNames.length > 1 ? `(${selectedStudentNames.length})` : ''}
+              </button>
+            </div>
           </div>
         </div>
         {selectedStudent && studentDetailStats && (
           <div ref={studentReportRef} className="grid grid-cols-1 lg:grid-cols-2 gap-10 animate-slideUp bg-white p-2 rounded-2xl">
             <div className="space-y-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Đang xem báo cáo</p>
+                    <h3 className="text-lg font-black text-blue-900">{selectedStudent['HỌ TÊN HS']}</h3>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={exportStudentReportWord}
+                    disabled={isExporting}
+                    className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-100 transition-all border border-emerald-100 shadow-sm"
+                    title="Xuất Word cho học sinh này"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={exportStudentReportJPG}
+                    disabled={isExporting}
+                    className="p-2.5 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-100 transition-all border border-amber-100 shadow-sm"
+                    title="Xuất JPEG cho học sinh này"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-blue-900 p-5 rounded-2xl border border-blue-800 text-white shadow-lg">
                   <p className="text-[10px] font-black text-blue-300 uppercase mb-1">Tổng số buổi dự kiến</p>
