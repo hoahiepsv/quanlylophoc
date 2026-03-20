@@ -676,13 +676,24 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
     setIsExporting(true);
     try {
       const zip = new JSZip();
+      const originalSelected = selectedStudentName;
+      
       for (const name of selectedStudentNames) {
+        // Chuyển sang học sinh này để render chart trong preview
+        setSelectedStudentName(name);
+        // Chờ React render lại report và chart
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
         const student = students.find(s => s['HỌ TÊN HS'] === name);
         if (!student) continue;
         const stats = getStudentDetailStats(student);
         const blob = await generateStudentReportBlob(student, stats);
         zip.file(`Phieu_Hoc_Tap_${name}.docx`, blob);
       }
+      
+      // Khôi phục lại học sinh đang xem ban đầu
+      setSelectedStudentName(originalSelected);
+      
       const content = await zip.generateAsync({ type: "blob" });
       saveAs(content, `Bao_Cao_Ca_Nhan_Word_${cleanDateStr(today)}.zip`);
     } catch (err) {
@@ -1243,26 +1254,30 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
                     <h3 className="text-lg font-black text-blue-900">{selectedStudent['HỌ TÊN HS']}</h3>
                   </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-3">
                   <button
                     onClick={exportStudentReportWord}
                     disabled={isExporting}
-                    className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-100 transition-all border border-emerald-100 shadow-sm"
-                    title="Xuất Word cho học sinh này"
+                    className={`flex items-center gap-2 px-5 py-3 rounded-xl font-black transition-all shadow-md active:scale-95 uppercase text-[11px] ${
+                      !isExporting ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    }`}
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
+                    Xuất Word
                   </button>
                   <button
                     onClick={exportStudentReportJPG}
                     disabled={isExporting}
-                    className="p-2.5 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-100 transition-all border border-amber-100 shadow-sm"
-                    title="Xuất JPEG cho học sinh này"
+                    className={`flex items-center gap-2 px-5 py-3 rounded-xl font-black transition-all shadow-md active:scale-95 uppercase text-[11px] ${
+                      !isExporting ? 'bg-amber-600 text-white hover:bg-amber-700' : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    }`}
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
+                    Xuất JPEG
                   </button>
                 </div>
               </div>
