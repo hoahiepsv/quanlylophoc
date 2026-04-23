@@ -92,6 +92,15 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
     return (student['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).length;
   };
 
+  const calculateProjected = (student: Student) => {
+    return (student['LỊCH HỌC'] || '').split(' ').filter(d => d).length;
+  };
+
+  const calculateEndDate = (student: Student) => {
+    const schedule = (student['LỊCH HỌC'] || '').split(' ').filter(d => d).map(d => cleanDateStr(d)).sort();
+    return schedule.length > 0 ? schedule[schedule.length - 1] : '';
+  };
+
   const classStats = useMemo(() => {
     const paidThisMonth: Student[] = [];
     const unpaidThisMonth: Student[] = [];
@@ -365,6 +374,8 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
                   new TableCell({ shading: { fill: "f8fafc" }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Họ tên học sinh", bold: true, font: WORD_FONT, size: 20 })] })] }),
                   new TableCell({ shading: { fill: "f8fafc" }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Nhóm", bold: true, font: WORD_FONT, size: 20 })] })] }),
                   new TableCell({ shading: { fill: "f8fafc" }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Bắt đầu", bold: true, font: WORD_FONT, size: 20 })] })] }),
+                  new TableCell({ shading: { fill: "f8fafc" }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Kết thúc", bold: true, font: WORD_FONT, size: 20 })] })] }),
+                  new TableCell({ shading: { fill: "f8fafc" }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Dự kiến", bold: true, font: WORD_FONT, size: 20 })] })] }),
                   new TableCell({ shading: { fill: "f8fafc" }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Số buổi dạy", bold: true, font: WORD_FONT, size: 20 })] })] }),
                   new TableCell({ shading: { fill: "f8fafc" }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "Vắng", bold: true, font: WORD_FONT, size: 20 })] })] }),
                   new TableCell({ shading: { fill: "f8fafc" }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "SĐT", bold: true, font: WORD_FONT, size: 20 })] })] }),
@@ -379,6 +390,8 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
                     new TableCell({ verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ children: [new TextRun({ text: s['HỌ TÊN HS'], bold: true, font: WORD_FONT, size: 20 })] })] }),
                     new TableCell({ verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, text: s['TÊN LỚP'], font: WORD_FONT, size: 20 })] }),
                     new TableCell({ verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, text: formatDateVN(s['NGÀY BẮT ĐẦU']), font: WORD_FONT, size: 20 })] }),
+                    new TableCell({ verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, text: formatDateVN(calculateEndDate(s)), font: WORD_FONT, size: 20 })] }),
+                    new TableCell({ verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${calculateProjected(s)}`, bold: true, font: WORD_FONT, size: 20 })] })] }),
                     new TableCell({ verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${calculateAttended(s)}`, bold: true, color: "2563eb", font: WORD_FONT, size: 20 })] })] }),
                     new TableCell({ verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${calculateAbsences(s)}`, bold: true, color: "dc2626", font: WORD_FONT, size: 20 })] })] }),
                     new TableCell({ verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, text: s['SỐ ĐIỆN THOẠI 1'], font: WORD_FONT, size: 20 })] }),
@@ -936,6 +949,8 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
                   <th style={{ border: '1px solid #e2e8f0', padding: '12px', textAlign: 'left' }}>Họ tên học sinh</th>
                   <th style={{ border: '1px solid #e2e8f0', padding: '12px' }}>Nhóm - Lớp</th>
                   <th style={{ border: '1px solid #e2e8f0', padding: '12px' }}>Bắt đầu</th>
+                  <th style={{ border: '1px solid #e2e8f0', padding: '12px' }}>Kết thúc</th>
+                  <th style={{ border: '1px solid #e2e8f0', padding: '12px' }}>Dự kiến</th>
                   <th style={{ border: '1px solid #e2e8f0', padding: '12px' }}>Đã dạy</th>
                   <th style={{ border: '1px solid #e2e8f0', padding: '12px' }}>Vắng</th>
                   <th style={{ border: '1px solid #e2e8f0', padding: '12px' }}>SĐT liên hệ</th>
@@ -964,6 +979,8 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
                       <td style={{ border: '1px solid #e2e8f0', padding: '12px', fontWeight: 'bold' }}>{s['HỌ TÊN HS']}</td>
                       <td style={{ border: '1px solid #e2e8f0', padding: '12px', textAlign: 'center' }}>{s['KHỐI']} - {s['TÊN LỚP']}</td>
                       <td style={{ border: '1px solid #e2e8f0', padding: '12px', textAlign: 'center' }}>{formatDateVN(s['NGÀY BẮT ĐẦU'])}</td>
+                      <td style={{ border: '1px solid #e2e8f0', padding: '12px', textAlign: 'center' }}>{formatDateVN(calculateEndDate(s))}</td>
+                      <td style={{ border: '1px solid #e2e8f0', padding: '12px', textAlign: 'center', fontWeight: 'bold' }}>{calculateProjected(s)}</td>
                       <td style={{ border: '1px solid #e2e8f0', padding: '12px', textAlign: 'center', fontWeight: 'bold', color: '#059669' }}>{attendedCount}</td>
                       <td style={{ border: '1px solid #e2e8f0', padding: '12px', textAlign: 'center', fontWeight: 'bold', color: '#dc2626' }}>{absenceCount}</td>
                       <td style={{ border: '1px solid #e2e8f0', padding: '12px', textAlign: 'center' }}>{s['SỐ ĐIỆN THOẠI 1']}</td>
