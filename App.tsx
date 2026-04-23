@@ -6,6 +6,8 @@ import StudentForm from './components/StudentForm';
 import Statistics from './components/Statistics';
 import TeacherScheduleComponent from './components/TeacherSchedule';
 import Attendance from './components/Attendance';
+import StudentReportModal from './components/StudentReportModal';
+import { ExternalLink } from 'lucide-react';
 
 const App: React.FC = () => {
   // Authentication & Settings
@@ -24,6 +26,7 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('list');
   const [tempSelection, setTempSelection] = useState<string>('');
   const [selectedForEdit, setSelectedForEdit] = useState<Student | null>(null);
+  const [selectedStudentForReport, setSelectedStudentForReport] = useState<Student | null>(null);
 
   // Filter State for List Tab
   const [listFilterGrade, setListFilterGrade] = useState<string>('');
@@ -64,8 +67,10 @@ const App: React.FC = () => {
     
     const attended = schedule.filter(d => d <= nowStr).length;
     const vắng = absences.length;
+    const expected = schedule.length;
+    const endDate = schedule.length > 0 ? schedule[schedule.length - 1] : '';
     
-    return { attended, vắng };
+    return { attended, vắng, expected, endDate };
   };
 
   const loadData = useCallback(async () => {
@@ -417,9 +422,11 @@ const App: React.FC = () => {
                   <tr>
                     <th className="px-6 py-4">HỌ TÊN HS</th>
                     <th className="px-6 py-4">NHÓM/LỚP</th>
-                    <th className="px-6 py-4">SĐT LIÊN HỆ</th>
-                    <th className="px-6 py-4">NGÀY BẮT ĐẦU</th>
-                    <th className="px-6 py-4">ĐÃ HỌC</th>
+                    <th className="px-6 py-4">SĐT</th>
+                    <th className="px-6 py-4">NGÀY BĐ</th>
+                    <th className="px-6 py-4 text-center">NGÀY KT</th>
+                    <th className="px-6 py-4 text-center">DỰ KIẾN</th>
+                    <th className="px-6 py-4 text-center">ĐÃ DẠY</th>
                     <th className="px-6 py-4">VẮNG</th>
                     <th className="px-6 py-4">HỌC PHÍ</th>
                     <th className="px-6 py-4 text-center">HÀNH ĐỘNG</th>
@@ -430,7 +437,15 @@ const App: React.FC = () => {
                     const stats = calculateStudentStats(student);
                     return (
                       <tr key={idx} className="hover:bg-blue-50/40 transition-colors group">
-                        <td className="px-6 py-5 font-bold text-gray-800 group-hover:text-blue-700 transition-colors">{student['HỌ TÊN HS']}</td>
+                        <td 
+                          className="px-6 py-5 font-bold text-gray-800 group-hover:text-blue-700 transition-colors cursor-pointer hover:bg-blue-50 rounded-lg"
+                          onClick={() => setSelectedStudentForReport(student)}
+                        >
+                          <div className="flex items-center gap-2">
+                             <span>{student['HỌ TÊN HS']}</span>
+                             <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                        </td>
                         <td className="px-6 py-5">
                           <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-lg text-[10px] font-black mr-2 uppercase">Nhóm {student['KHỐI']}</span>
                           <span className="font-medium text-gray-600">{student['TÊN LỚP']}</span>
@@ -442,24 +457,17 @@ const App: React.FC = () => {
                           >
                             {student['SỐ ĐIỆN THOẠI 1']}
                           </a>
-                          {student['SỐ ĐIỆN THOẠI 2'] && (
-                            <a 
-                              href={`tel:${student['SỐ ĐIỆN THOẠI 2']}`} 
-                              className="block text-[10px] text-gray-400 font-medium hover:underline hover:text-blue-600 transition-all mt-1"
-                            >
-                              {student['SỐ ĐIỆN THOẠI 2']}
-                            </a>
-                          )}
-                          {!student['SỐ ĐIỆN THOẠI 2'] && (
-                            <div className="text-[10px] text-gray-300 italic mt-1">Không có SĐT 2</div>
-                          )}
                         </td>
                         <td className="px-6 py-5 text-xs font-mono font-bold text-gray-500">{formatDateVN(student['NGÀY BẮT ĐẦU'])}</td>
-                        <td className="px-6 py-5">
-                          <span className="text-emerald-600 font-black text-xs">{stats.attended} buổi</span>
+                        <td className="px-6 py-5 text-xs font-mono font-bold text-gray-400 text-center">{formatDateVN(stats.endDate)}</td>
+                        <td className="px-6 py-5 text-center">
+                          <span className="text-blue-900 font-black text-xs">{stats.expected}</span>
                         </td>
-                        <td className="px-6 py-5">
-                          <span className="text-red-500 font-black text-xs">{stats.vắng} buổi</span>
+                        <td className="px-6 py-5 text-center">
+                          <span className="text-emerald-600 font-black text-xs">{stats.attended}</span>
+                        </td>
+                        <td className="px-6 py-5 text-center">
+                          <span className="text-red-500 font-black text-xs">{stats.vắng}</span>
                         </td>
                         <td className="px-6 py-5">
                           <div className="flex flex-wrap gap-1">
@@ -629,6 +637,14 @@ const App: React.FC = () => {
           </div>
         </div>
       </footer>
+
+      {selectedStudentForReport && (
+        <StudentReportModal 
+          student={selectedStudentForReport}
+          modelMode={modelMode}
+          onClose={() => setSelectedStudentForReport(null)}
+        />
+      )}
     </div>
   );
 };
