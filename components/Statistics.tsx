@@ -38,6 +38,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
   const [selectedStudentNames, setSelectedStudentNames] = useState<string[]>([]);
   const [reportSearchTerm, setReportSearchTerm] = useState('');
   const [reportFilterGrade, setReportFilterGrade] = useState('');
+  const [statsFilterGrade, setStatsFilterGrade] = useState('');
   const [isExporting, setIsExporting] = useState(false);
   
   const studentReportRef = useRef<HTMLDivElement>(null);
@@ -101,12 +102,16 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
     return schedule.length > 0 ? schedule[schedule.length - 1] : '';
   };
 
+  const filteredStudentsForStats = useMemo(() => {
+    return statsFilterGrade ? students.filter(s => String(s['KHỐI']) === statsFilterGrade) : students;
+  }, [students, statsFilterGrade]);
+
   const classStats = useMemo(() => {
     const paidThisMonth: Student[] = [];
     const unpaidThisMonth: Student[] = [];
     const debtors: { student: Student; unpaidMonths: string[] }[] = [];
 
-    students.forEach(s => {
+    filteredStudentsForStats.forEach(s => {
       const fees = (s['ĐÓNG HỌC PHÍ'] || '').split(' ').filter(f => f);
       const required = getRequiredMonths(s['NGÀY BẮT ĐẦU']);
       
@@ -122,7 +127,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
     });
 
     return { paidThisMonth, unpaidThisMonth, debtors };
-  }, [students, currentMonthTag, today]);
+  }, [filteredStudentsForStats, currentMonthTag, today]);
 
   const filteredStudentsForReport = useMemo(() => {
     return students.filter(s => {
@@ -245,7 +250,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
     setIsExporting(true);
     try {
       const aiInsights = await geminiService.generateReportContent('class', {
-        total: students.length,
+        total: filteredStudentsForStats.length,
         paid: classStats.paidThisMonth.length,
         unpaid: classStats.unpaidThisMonth.length,
         debtors: classStats.debtors.length
@@ -262,7 +267,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
           alignment: AlignmentType.CENTER,
           children: [
             new TextRun({
-              text: "BÁO CÁO TỔNG QUAN HỌC TẬP",
+              text: `BÁO CÁO TỔNG QUAN HỌC TẬP ${statsFilterGrade ? `- NHÓM ${statsFilterGrade}` : ''}`,
               bold: true,
               size: 36,
               font: WORD_FONT,
@@ -332,7 +337,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
             new TableRow({
               children: [
                 new TableCell({ children: [new Paragraph({ text: "Tổng số học sinh quản lý", font: WORD_FONT, size: WORD_SIZE })] }),
-                new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${students.length}`, bold: true, font: WORD_FONT, size: WORD_SIZE })] })] }),
+                new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${filteredStudentsForStats.length}`, bold: true, font: WORD_FONT, size: WORD_SIZE })] })] }),
                 new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, text: "100%", font: WORD_FONT, size: WORD_SIZE })] }),
               ],
             }),
@@ -917,7 +922,9 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
       <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
         <div ref={classJpegTemplateRef} style={{ width: '1200px', padding: '50px', backgroundColor: '#ffffff', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
           <div style={{ textAlign: 'center', marginBottom: '40px', borderBottom: '5px solid #1e3a8a', paddingBottom: '20px' }}>
-            <h1 style={{ fontSize: '42px', color: '#1e3a8a', margin: '0', textTransform: 'uppercase', fontWeight: '900' }}>Báo Cáo Tổng Quan Học Tập</h1>
+            <h1 style={{ fontSize: '42px', color: '#1e3a8a', margin: '0', textTransform: 'uppercase', fontWeight: '900' }}>
+              Báo Cáo Tổng Quan Học Tập {statsFilterGrade ? `- Nhóm ${statsFilterGrade}` : ''}
+            </h1>
             <p style={{ color: '#475569', fontSize: '20px', marginTop: '10px' }}>Thời gian: Tháng {currentMonth} Năm {currentYear}</p>
             <p style={{ color: '#94a3b8', fontSize: '14px', marginTop: '5px' }}>Đơn vị: Trung tâm Hoà Hiệp AI | Ngày xuất: {today.toLocaleDateString('vi-VN')}</p>
           </div>
@@ -925,7 +932,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '40px' }}>
             <div style={{ background: '#f1f5f9', padding: '25px', borderRadius: '20px', textAlign: 'center', border: '1px solid #e2e8f0' }}>
               <span style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase' }}>Sĩ số nhóm</span>
-              <span style={{ fontSize: '48px', fontWeight: '900', color: '#1e3a8a' }}>{students.length}</span>
+              <span style={{ fontSize: '48px', fontWeight: '900', color: '#1e3a8a' }}>{filteredStudentsForStats.length}</span>
             </div>
             <div style={{ background: '#ecfdf5', padding: '25px', borderRadius: '20px', textAlign: 'center', border: '1px solid #d1fae5' }}>
               <span style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', color: '#059669', textTransform: 'uppercase' }}>Đã đóng phí</span>
@@ -958,7 +965,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
                 </tr>
               </thead>
               <tbody>
-                {students.map((s, i) => {
+                {filteredStudentsForStats.map((s, i) => {
                   const isPaid = classStats.paidThisMonth.includes(s);
                   const debt = classStats.debtors.find(d => d.student === s);
                   const attendedCount = calculateAttended(s);
@@ -1008,10 +1015,23 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
       {/* Main UI */}
       <div className="bg-white p-6 md:p-8 rounded-2xl shadow-xl border border-blue-50">
         <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
-          <h2 className="text-xl font-black text-blue-900 uppercase flex items-center gap-3">
-            <span className="w-2 h-8 bg-blue-600 rounded-full"></span>
-            Thống kê nhóm (T{currentMonth}/{currentYear})
-          </h2>
+          <div className="flex flex-col gap-1 w-full md:w-auto">
+             <h2 className="text-xl font-black text-blue-900 uppercase flex items-center gap-3">
+               <span className="w-2 h-8 bg-blue-600 rounded-full"></span>
+               Thống kê nhóm (T{currentMonth}/{currentYear})
+             </h2>
+             <div className="flex items-center gap-2 mt-2">
+                <span className="text-[10px] font-black text-blue-500 uppercase">Chọn nhóm:</span>
+                <select 
+                  value={statsFilterGrade}
+                  onChange={(e) => setStatsFilterGrade(e.target.value)}
+                  className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-1 text-[11px] font-black text-blue-800 outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Tất cả</option>
+                  {activeGradesForFilter.map(g => <option key={g} value={g}>Nhóm {g}</option>)}
+                </select>
+             </div>
+          </div>
           <div className="grid grid-cols-3 md:flex md:flex-wrap justify-center gap-2 md:gap-3 w-full md:w-auto">
             <button 
               onClick={exportBackupExcel}
@@ -1043,7 +1063,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100">
             <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Sĩ số nhóm</p>
-            <p className="text-3xl font-black text-blue-900">{students.length}</p>
+            <p className="text-3xl font-black text-blue-900">{filteredStudentsForStats.length}</p>
           </div>
           <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-100">
             <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Đã đóng (T{currentMonth})</p>
