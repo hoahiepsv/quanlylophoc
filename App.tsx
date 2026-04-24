@@ -73,6 +73,32 @@ const App: React.FC = () => {
     return { attended, vắng, expected, endDate };
   };
 
+  const getGradeColor = (grade: string | number) => {
+    const gradeStr = String(grade).trim();
+    if (gradeStr === 'Đã thôi học') return 'bg-gray-100 text-gray-600 border-gray-200';
+    
+    const colors = [
+      'bg-blue-100 text-blue-800 border-blue-200',
+      'bg-emerald-100 text-emerald-800 border-emerald-200',
+      'bg-purple-100 text-purple-800 border-purple-200',
+      'bg-amber-100 text-amber-800 border-amber-200',
+      'bg-rose-100 text-rose-800 border-rose-200',
+      'bg-cyan-100 text-cyan-800 border-cyan-200',
+      'bg-indigo-100 text-indigo-800 border-indigo-200',
+      'bg-orange-100 text-orange-800 border-orange-200',
+      'bg-lime-100 text-lime-800 border-lime-200',
+      'bg-teal-100 text-teal-800 border-teal-200',
+    ];
+    
+    // Use a simple hash to pick a color based on the grade string
+    let hash = 0;
+    for (let i = 0; i < gradeStr.length; i++) {
+        hash = gradeStr.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const index = Math.abs(hash) % colors.length;
+    return colors[index];
+  };
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -427,8 +453,8 @@ const App: React.FC = () => {
                     <th className="px-6 py-4 text-center">NGÀY KT</th>
                     <th className="px-6 py-4 text-center">DỰ KIẾN</th>
                     <th className="px-6 py-4 text-center">ĐÃ DẠY</th>
-                    <th className="px-6 py-4">VẮNG</th>
-                    <th className="px-6 py-4">HỌC PHÍ</th>
+                    <th className="px-6 py-4 text-center">VẮNG</th>
+                    <th className="px-6 py-4 text-right">HỌC PHÍ</th>
                     <th className="px-6 py-4 text-center">HÀNH ĐỘNG</th>
                   </tr>
                 </thead>
@@ -447,7 +473,7 @@ const App: React.FC = () => {
                           </div>
                         </td>
                         <td className="px-6 py-5">
-                          <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-lg text-[10px] font-black mr-2 uppercase">Nhóm {student['KHỐI']}</span>
+                          <span className={`px-2 py-1 rounded-lg text-[10px] font-black mr-2 uppercase border ${getGradeColor(student['KHỐI'])}`}>Nhóm {student['KHỐI']}</span>
                           <span className="font-medium text-gray-600">{student['TÊN LỚP']}</span>
                         </td>
                         <td className="px-6 py-5">
@@ -469,8 +495,8 @@ const App: React.FC = () => {
                         <td className="px-6 py-5 text-center">
                           <span className="text-red-500 font-black text-xs">{stats.vắng}</span>
                         </td>
-                        <td className="px-6 py-5">
-                          <div className="flex flex-wrap gap-1">
+                        <td className="px-6 py-5 text-right">
+                          <div className="flex flex-wrap gap-1 justify-end">
                             {(student['ĐÓNG HỌC PHÍ'] || '').split(' ').filter(f => f).map(f => (
                               <span key={f} className="text-[9px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200 font-black uppercase tracking-tighter">{f}</span>
                             ))}
