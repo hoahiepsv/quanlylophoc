@@ -67,7 +67,7 @@ const StudentReportModal: React.FC<StudentReportModalProps> = ({ student, onClos
     }));
 
     // Tính toán tháng nợ
-    const getRequiredMonths = (startDateStr: string) => {
+    const getRequiredMonths = (startDateStr: string, endDateStr?: string) => {
         if (!startDateStr) return [];
         const dateOnly = cleanDateStr(startDateStr);
         const parts = dateOnly.split('-');
@@ -77,18 +77,33 @@ const StudentReportModal: React.FC<StudentReportModalProps> = ({ student, onClos
         const month = parseInt(parts[1]);
         const start = new Date(year, month - 1, 1);
         
-        const required: string[] = [];
+        const requiredMonths: string[] = [];
         let cur = new Date(start.getFullYear(), start.getMonth(), 1);
-        const target = new Date(today.getFullYear(), today.getMonth(), 1);
+        
+        // Target boundary is earlier of today vs last schedule month
+        const targetDate = new Date(today.getFullYear(), today.getMonth(), 1);
+        let finalTarget = targetDate;
+        
+        if (endDateStr) {
+          const endClean = cleanDateStr(endDateStr);
+          const endParts = endClean.split('-');
+          if (endParts.length === 3) {
+            const endMonthDate = new Date(parseInt(endParts[0]), parseInt(endParts[1]) - 1, 1);
+            if (endMonthDate < targetDate) {
+              finalTarget = endMonthDate;
+            }
+          }
+        }
 
-        while (cur <= target) {
-          required.push(`T${cur.getMonth() + 1}/${cur.getFullYear()}`);
+        while (cur <= finalTarget) {
+          requiredMonths.push(`T${cur.getMonth() + 1}/${cur.getFullYear()}`);
           cur.setMonth(cur.getMonth() + 1);
         }
-        return required;
+        return requiredMonths;
     };
 
-    const required = getRequiredMonths(student['NGÀY BẮT ĐẦU']);
+    const endDate = schedule.length > 0 ? schedule[schedule.length - 1] : '';
+    const required = getRequiredMonths(student['NGÀY BẮT ĐẦU'], endDate);
     const unpaidMonths = required.filter(m => !fees.includes(m));
 
     return {

@@ -61,7 +61,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
     return clean;
   };
 
-  const getRequiredMonths = (startDateStr: string) => {
+  const getRequiredMonths = (startDateStr: string, endDateStr?: string) => {
     if (!startDateStr) return [];
     const dateOnly = cleanDateStr(startDateStr);
     const parts = dateOnly.split('-');
@@ -73,9 +73,23 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
     
     const required: string[] = [];
     let curr = new Date(start.getFullYear(), start.getMonth(), 1);
-    const target = new Date(today.getFullYear(), today.getMonth(), 1);
+    
+    // Determine the end boundary: earlier of today's month OR the last scheduled session's month
+    const targetDate = new Date(today.getFullYear(), today.getMonth(), 1);
+    let finalTarget = targetDate;
+    
+    if (endDateStr) {
+      const endClean = cleanDateStr(endDateStr);
+      const endParts = endClean.split('-');
+      if (endParts.length === 3) {
+        const endMonthDate = new Date(parseInt(endParts[0]), parseInt(endParts[1]) - 1, 1);
+        if (endMonthDate < targetDate) {
+          finalTarget = endMonthDate;
+        }
+      }
+    }
 
-    while (curr <= target) {
+    while (curr <= finalTarget) {
       required.push(`T${curr.getMonth() + 1}/${curr.getFullYear()}`);
       curr.setMonth(curr.getMonth() + 1);
     }
@@ -84,7 +98,6 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
 
   const calculateAttended = (student: Student) => {
     const schedule = (student['LỊCH HỌC'] || '').split(' ').filter(d => d).map(d => cleanDateStr(d));
-    const absences = (student['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).map(d => cleanDateStr(d));
     const nowStr = cleanDateStr(today);
     return schedule.filter(d => d <= nowStr).length;
   };
@@ -113,7 +126,8 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
 
     filteredStudentsForStats.forEach(s => {
       const fees = (s['ĐÓNG HỌC PHÍ'] || '').split(' ').filter(f => f);
-      const required = getRequiredMonths(s['NGÀY BẮT ĐẦU']);
+      const endDate = calculateEndDate(s);
+      const required = getRequiredMonths(s['NGÀY BẮT ĐẦU'], endDate);
       
       const isPaidThisMonth = fees.includes(currentMonthTag);
       const missingMonths = required.filter(m => !fees.includes(m));
@@ -170,7 +184,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
     }).length;
     
     const totalExpectedSessions = schedule.length;
-    const required = getRequiredMonths(student['NGÀY BẮT ĐẦU']);
+    const required = getRequiredMonths(student['NGÀY BẮT ĐẦU'], calculateEndDate(student));
     const unpaidMonths = required.filter(m => !fees.includes(m));
 
     const monthlyMap: Record<string, number> = {};
