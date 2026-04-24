@@ -69,8 +69,43 @@ const App: React.FC = () => {
     const vắng = absences.length;
     const expected = schedule.length;
     const endDate = schedule.length > 0 ? schedule[schedule.length - 1] : '';
+    const isFinished = endDate && new Date().toISOString().split('T')[0] > endDate;
     
-    return { attended, vắng, expected, endDate };
+    return { attended, vắng, expected, endDate, isFinished };
+  };
+
+  const getRequiredMonths = (startDateStr: string, endDateStr?: string) => {
+    if (!startDateStr) return [];
+    const clean = startDateStr.split(/[T ]/)[0];
+    const parts = clean.split('-');
+    if (parts.length < 3) return [];
+    
+    const year = parseInt(parts[0]);
+    const month = parseInt(parts[1]);
+    const start = new Date(year, month - 1, 1);
+    
+    const required: string[] = [];
+    let curr = new Date(start.getFullYear(), start.getMonth(), 1);
+    
+    const today = new Date();
+    const targetDate = new Date(today.getFullYear(), today.getMonth(), 1);
+    let finalTarget = targetDate;
+    
+    if (endDateStr) {
+      const endParts = endDateStr.split('-');
+      if (endParts.length === 3) {
+        const endMonthDate = new Date(parseInt(endParts[0]), parseInt(endParts[1]) - 1, 1);
+        if (endMonthDate < targetDate) {
+          finalTarget = endMonthDate;
+        }
+      }
+    }
+
+    while (curr <= finalTarget) {
+      required.push(`T${curr.getMonth() + 1}/${curr.getFullYear()}`);
+      curr.setMonth(curr.getMonth() + 1);
+    }
+    return required;
   };
 
   const getGradeColor = (grade: string | number) => {
@@ -496,10 +531,32 @@ const App: React.FC = () => {
                           <span className="text-red-500 font-black text-xs">{stats.vắng}</span>
                         </td>
                         <td className="px-6 py-5 text-right">
-                          <div className="flex flex-wrap gap-1 justify-end">
-                            {(student['ĐÓNG HỌC PHÍ'] || '').split(' ').filter(f => f).map(f => (
-                              <span key={f} className="text-[9px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200 font-black uppercase tracking-tighter">{f}</span>
-                            ))}
+                          <div className="flex flex-col items-end gap-1">
+                            <div className="flex flex-wrap gap-1 justify-end">
+                              {(student['ĐÓNG HỌC PHÍ'] || '').split(' ').filter(f => f).map(f => (
+                                <span key={f} className="text-[9px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200 font-black uppercase tracking-tighter">{f}</span>
+                              ))}
+                            </div>
+                            {(() => {
+                              const fees = (student['ĐÓNG HỌC PHÍ'] || '').split(' ').filter(f => f);
+                              const required = getRequiredMonths(student['NGÀY BẮT ĐẦU'], stats.endDate);
+                              const unpaid = required.filter(m => !fees.includes(m));
+                              
+                              if (unpaid.length > 0) {
+                                return (
+                                  <div className="flex flex-wrap gap-1 justify-end mt-1">
+                                    {unpaid.map(m => (
+                                      <span key={m} className="text-[9px] bg-red-50 text-red-700 px-2 py-0.5 rounded-full border border-red-100 font-black uppercase tracking-tighter shadow-sm">Nợ {m}</span>
+                                    ))}
+                                  </div>
+                                );
+                              } else if (stats.isFinished) {
+                                return (
+                                  <span className="text-[9px] bg-blue-50 text-blue-800 px-2 py-0.5 rounded-full border border-blue-200 font-black uppercase tracking-tighter mt-1 shadow-sm">Đã kết thúc</span>
+                                );
+                              }
+                              return null;
+                            })()}
                           </div>
                         </td>
                         <td className="px-6 py-5 text-center">
