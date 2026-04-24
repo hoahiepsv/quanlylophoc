@@ -103,6 +103,7 @@ const StudentReportModal: React.FC<StudentReportModalProps> = ({ student, onClos
     };
 
     const endDate = schedule.length > 0 ? schedule[schedule.length - 1] : '';
+    const isFinished = endDate && cleanDateStr(today) > endDate;
     const required = getRequiredMonths(student['NGÀY BẮT ĐẦU'], endDate);
     const unpaidMonths = required.filter(m => !fees.includes(m));
 
@@ -115,6 +116,7 @@ const StudentReportModal: React.FC<StudentReportModalProps> = ({ student, onClos
       paidMonths: fees,
       unpaidCount: unpaidMonths.length,
       unpaidMonths: unpaidMonths,
+      isFinished,
       chartData
     };
   }, [student, today, nowStr]);
@@ -242,7 +244,7 @@ const StudentReportModal: React.FC<StudentReportModalProps> = ({ student, onClos
                 <span className="block text-[10px] text-orange-600 font-bold uppercase">NỢ PHÍ</span>
                 <span className="text-xl font-black text-orange-800">{stats.unpaidCount}</span>
                 <p className="text-[7px] text-orange-700 mt-1 leading-tight font-bold">
-                  {stats.unpaidMonths.length > 0 ? stats.unpaidMonths.join(', ') : 'Hoàn thành ✓'}
+                  {stats.unpaidMonths.length > 0 ? stats.unpaidMonths.join(', ') : (stats.isFinished ? 'Đã kết thúc ✓' : 'Hoàn thành ✓')}
                 </p>
               </div>
             </div>

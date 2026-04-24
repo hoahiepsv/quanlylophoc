@@ -184,7 +184,9 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
     }).length;
     
     const totalExpectedSessions = schedule.length;
-    const required = getRequiredMonths(student['NGÀY BẮT ĐẦU'], calculateEndDate(student));
+    const endDate = calculateEndDate(student);
+    const isFinished = endDate && cleanDateStr(today) > endDate;
+    const required = getRequiredMonths(student['NGÀY BẮT ĐẦU'], endDate);
     const unpaidMonths = required.filter(m => !fees.includes(m));
 
     const monthlyMap: Record<string, number> = {};
@@ -211,6 +213,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
       paidMonths: fees,
       unpaidCount: unpaidMonths.length,
       unpaidLabels: unpaidMonths.join(', '),
+      isFinished,
       chartData
     };
   };
@@ -402,7 +405,11 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
                 ],
               }),
               ...entry.list.map((s, idx) => {
-                const unpaid = isDebt ? (classStats.debtors.find(d => d.student === s)?.unpaidMonths.join(', ') || '') : '';
+                const debtInfo = classStats.debtors.find(d => d.student === s);
+                const unpaid = debtInfo?.unpaidMonths.join(', ') || '';
+                const isFinished = calculateEndDate(s) && cleanDateStr(today) > calculateEndDate(s);
+                const noteText = isDebt ? unpaid : (isFinished ? "Đã kết thúc" : "");
+                
                 return new TableRow({
                   children: [
                     new TableCell({ verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, text: `${idx + 1}`, font: WORD_FONT, size: 20 })] }),
@@ -414,7 +421,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
                     new TableCell({ verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${calculateAttended(s)}`, bold: true, color: "2563eb", font: WORD_FONT, size: 20 })] })] }),
                     new TableCell({ verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${calculateAbsences(s)}`, bold: true, color: "dc2626", font: WORD_FONT, size: 20 })] })] }),
                     new TableCell({ verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, text: s['SỐ ĐIỆN THOẠI 1'], font: WORD_FONT, size: 20 })] }),
-                    new TableCell({ verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: isDebt ? unpaid : '', color: isDebt ? "dc2626" : "000000", font: WORD_FONT, size: 18 })] })] }),
+                    new TableCell({ verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: noteText, color: isDebt ? "dc2626" : (isFinished ? "1e3a8a" : "000000"), bold: isFinished, font: WORD_FONT, size: 18 })] })] }),
                   ],
                 });
               }),
@@ -640,11 +647,11 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
               }),
               new TableRow({
                 children: [
-                  new TableCell({ children: [new Paragraph({ text: "Tháng còn nợ phí", font: WORD_FONT, size: WORD_SIZE })] }),
-                  new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${stats.unpaidCount} tháng`, bold: true, color: "dc2626", font: WORD_FONT, size: WORD_SIZE })] })] }),
-                  new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: stats.unpaidLabels || 'Hoàn thành ✅', bold: true, font: WORD_FONT, size: WORD_SIZE })] })] }),
-                ],
-              }),
+                   new TableCell({ children: [new Paragraph({ text: "Tháng còn nợ phí", font: WORD_FONT, size: WORD_SIZE })] }),
+                   new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${stats.unpaidCount} tháng`, bold: true, color: "dc2626", font: WORD_FONT, size: WORD_SIZE })] })] }),
+                   new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: stats.unpaidLabels || (stats.isFinished ? 'Đã kết thúc ✓' : 'Hoàn thành ✅'), bold: true, color: stats.isFinished ? "1e3a8a" : (stats.unpaidCount > 0 ? "dc2626" : "059669"), font: WORD_FONT, size: WORD_SIZE })] })] }),
+                 ],
+               }),
             ],
           }),
 
@@ -982,17 +989,22 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
                 {filteredStudentsForStats.map((s, i) => {
                   const isPaid = classStats.paidThisMonth.includes(s);
                   const debt = classStats.debtors.find(d => d.student === s);
-                  const attendedCount = calculateAttended(s);
                   const absenceCount = (s['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).length;
+                  const attendedCount = calculateAttended(s);
+                  const endDate = calculateEndDate(s);
+                  const isFinished = endDate && cleanDateStr(today) > endDate;
                   
                   let statusText = 'Chưa đóng phí';
                   let statusColor = '#dc2626'; // Red
-                  if (isPaid) {
-                    statusText = 'Đã hoàn thành ✓';
-                    statusColor = '#059669'; // Emerald
-                  } else if (debt) {
+                  if (debt) {
                     statusText = `Nợ cũ: ${debt.unpaidMonths.join(', ')}`;
                     statusColor = '#ea580c'; // Orange
+                  } else if (isFinished) {
+                    statusText = 'Đã kết thúc ✓';
+                    statusColor = '#1e3a8a'; // Navy
+                  } else if (isPaid) {
+                    statusText = 'Đã hoàn thành ✓';
+                    statusColor = '#059669'; // Emerald
                   }
 
                   return (
