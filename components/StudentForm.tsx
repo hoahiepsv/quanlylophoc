@@ -313,7 +313,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1.5">SỐ ĐIỆY THOẠI 1 (Zalo)</label>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5">SỐ ĐIỆN THOẠI 1 (Zalo)</label>
                 <input 
                   name="SỐ ĐIỆN THOẠI 1" 
                   value={formData['SỐ ĐIỆN THOẠI 1']} 
