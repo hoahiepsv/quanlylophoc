@@ -16,7 +16,8 @@ export interface Student {
 export interface TeacherSchedule {
   rowIndex?: number;
   'STT': number | string;
-  'KHỐI': string;
+  'KHỐI'?: string;
+  'TÊN NHÓM'?: string;
   'NGÀY DẠY TRONG THÁNG': string;
 }
 

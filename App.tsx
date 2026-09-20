@@ -7,7 +7,8 @@ import Statistics from './components/Statistics';
 import TeacherScheduleComponent from './components/TeacherSchedule';
 import Attendance from './components/Attendance';
 import StudentReportModal from './components/StudentReportModal';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Search, X } from 'lucide-react';
+import { removeVietnameseTones, normalizeSearchText, matchStudentSearch } from './utils';
 
 const App: React.FC = () => {
   // Authentication & Settings
@@ -30,6 +31,7 @@ const App: React.FC = () => {
 
   // Filter State for List Tab
   const [listFilterGrade, setListFilterGrade] = useState<string>('');
+  const [listSearchTerm, setListSearchTerm] = useState<string>('');
 
   // Filter State for Update Tab
   const [updateSearchTerm, setUpdateSearchTerm] = useState('');
@@ -243,15 +245,22 @@ const App: React.FC = () => {
   }, [students]);
 
   const filteredStudents = useMemo(() => {
-    if (!listFilterGrade) return sortedStudents;
-    return sortedStudents.filter(s => String(s['KHỐI']) === listFilterGrade);
-  }, [sortedStudents, listFilterGrade]);
+    return sortedStudents.filter(s => {
+      // Lọc theo nhóm nếu có chọn
+      const matchGrade = !listFilterGrade || String(s['KHỐI']) === listFilterGrade;
+      if (!matchGrade) return false;
+
+      // Tìm kiếm không phân biệt hoa/thường, không phân biệt có dấu tiếng Việt (tên, sđt, lớp, nhóm)
+      return matchStudentSearch(s, listSearchTerm);
+    });
+  }, [sortedStudents, listFilterGrade, listSearchTerm]);
 
   const filteredForUpdate = useMemo(() => {
     return sortedStudents.filter(s => {
       const matchGrade = !updateFilterGrade || String(s['KHỐI']) === updateFilterGrade;
-      const matchSearch = !updateSearchTerm || s['HỌ TÊN HS'].toLowerCase().includes(updateSearchTerm.toLowerCase());
-      return matchGrade && matchSearch;
+      if (!matchGrade) return false;
+
+      return matchStudentSearch(s, updateSearchTerm);
     });
   }, [sortedStudents, updateFilterGrade, updateSearchTerm]);
 
@@ -436,13 +445,68 @@ const App: React.FC = () => {
 
         {activeTab === 'list' && (
           <div className="bg-white rounded-2xl shadow-xl border border-blue-50 overflow-hidden">
-            <div className="p-6 bg-blue-50 border-b border-blue-100 flex flex-col md:flex-row justify-between items-center gap-6">
-              <div className="flex flex-col gap-1">
-                <h2 className="text-xl font-black text-blue-900 uppercase">Danh sách học sinh</h2>
-                <div className="flex flex-wrap gap-2 mt-2">
+            <div className="p-5 sm:p-6 bg-blue-50 border-b border-blue-100 space-y-4">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                  <h2 className="text-xl font-black text-blue-900 uppercase tracking-tight flex items-center gap-2.5">
+                    <span className="w-2.5 h-6 bg-blue-700 rounded-full inline-block"></span>
+                    Danh sách học sinh
+                  </h2>
+                  <p className="text-xs text-blue-700 font-bold mt-1">
+                    Đang hiển thị <span className="text-blue-900 font-black">{filteredStudents.length}</span> / {students.length} học sinh
+                    {listSearchTerm && (
+                      <span className="ml-2 inline-flex items-center gap-1 text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded-md font-semibold text-[11px]">
+                        Khớp với: "{listSearchTerm}"
+                      </span>
+                    )}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 self-end md:self-auto">
+                  <div className="bg-white border border-blue-200 px-3.5 py-1.5 rounded-xl shadow-xs text-center min-w-[70px]">
+                    <span className="text-[9px] block text-blue-500 font-black uppercase">Tổng HS</span>
+                    <span className="text-base font-black text-blue-900 leading-none">{students.length}</span>
+                  </div>
+                  {listFilterGrade && (
+                    <div className="bg-blue-700 px-3.5 py-1.5 rounded-xl shadow-sm text-center border-b-2 border-blue-900 min-w-[80px]">
+                      <span className="text-[9px] block text-blue-200 font-black uppercase">{String(listFilterGrade).startsWith('Nhóm') ? listFilterGrade : `Nhóm ${listFilterGrade}`}</span>
+                      <span className="text-base font-black text-white leading-none">{gradeCounts[listFilterGrade] || 0}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Thanh tìm kiếm & bộ lọc nhóm */}
+              <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between pt-1">
+                {/* Ô TÌM KIẾM HỌC SINH (KHÔNG PHÂN BIỆT HOA/THƯỜNG, DẤU TIẾNG VIỆT) */}
+                <div className="relative flex-grow max-w-xl">
+                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-blue-600">
+                    <Search className="h-4 w-4" />
+                  </span>
+                  <input 
+                    type="text"
+                    placeholder="Tìm theo tên học sinh, SĐT, nhóm, lớp (gõ có dấu hoặc không dấu)..."
+                    value={listSearchTerm}
+                    onChange={(e) => setListSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-9 py-2.5 bg-white border-2 border-blue-200/90 hover:border-blue-400 focus:border-blue-600 rounded-xl focus:ring-2 focus:ring-blue-500/20 outline-none text-xs sm:text-sm font-bold text-gray-800 shadow-xs placeholder:text-gray-400 placeholder:font-normal transition-all"
+                  />
+                  {listSearchTerm && (
+                    <button
+                      type="button"
+                      onClick={() => setListSearchTerm('')}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-700 cursor-pointer"
+                      title="Xoá từ khoá tìm kiếm"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Danh sách nút chọn nhóm */}
+                <div className="flex flex-wrap items-center gap-1.5">
                   <button 
                     onClick={() => setListFilterGrade('')}
-                    className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase transition-all shadow-sm ${listFilterGrade === '' ? 'bg-blue-700 text-white' : 'bg-white text-blue-700 hover:bg-blue-100'}`}
+                    className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase transition-all shadow-xs cursor-pointer ${listFilterGrade === '' ? 'bg-blue-700 text-white shadow-sm' : 'bg-white text-blue-700 hover:bg-blue-100 border border-blue-200/60'}`}
                   >
                     Tất cả
                   </button>
@@ -450,29 +514,11 @@ const App: React.FC = () => {
                     <button 
                       key={grade}
                       onClick={() => setListFilterGrade(grade)}
-                      className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase transition-all shadow-sm ${listFilterGrade === grade ? 'bg-blue-700 text-white' : 'bg-white text-blue-700 hover:bg-blue-100'}`}
+                      className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase transition-all shadow-xs cursor-pointer ${listFilterGrade === grade ? 'bg-blue-700 text-white shadow-sm' : 'bg-white text-blue-700 hover:bg-blue-100 border border-blue-200/60'}`}
                     >
-                      Nhóm {grade}
+                      {String(grade).startsWith('Nhóm') ? grade : `Nhóm ${grade}`}
                     </button>
                   ))}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="flex flex-col items-end">
-                   <div className="text-[9px] text-blue-400 font-black uppercase tracking-wider">Thống kê sĩ số</div>
-                   <div className="flex gap-2 mt-1">
-                      <div className="bg-white border border-blue-200 px-4 py-2 rounded-xl shadow-sm text-center">
-                        <span className="text-[10px] block text-blue-400 font-black uppercase">Tổng</span>
-                        <span className="text-lg font-black text-blue-900 leading-none">{students.length}</span>
-                      </div>
-                      {listFilterGrade && (
-                        <div className="bg-blue-700 px-4 py-2 rounded-xl shadow-lg text-center border-b-2 border-blue-900">
-                          <span className="text-[10px] block text-blue-200 font-black uppercase">Nhóm {listFilterGrade}</span>
-                          <span className="text-lg font-black text-white leading-none">{gradeCounts[listFilterGrade] || 0}</span>
-                        </div>
-                      )}
-                   </div>
                 </div>
               </div>
             </div>
@@ -508,7 +554,9 @@ const App: React.FC = () => {
                           </div>
                         </td>
                         <td className="px-6 py-5">
-                          <span className={`px-2 py-1 rounded-lg text-[10px] font-black mr-2 uppercase border ${getGradeColor(student['KHỐI'])}`}>Nhóm {student['KHỐI']}</span>
+                          <span className={`px-2 py-1 rounded-lg text-[10px] font-black mr-2 uppercase border ${getGradeColor(student['KHỐI'])}`}>
+                            {String(student['KHỐI']).startsWith('Nhóm') ? student['KHỐI'] : `Nhóm ${student['KHỐI']}`}
+                          </span>
                           <span className="font-medium text-gray-600">{student['TÊN LỚP']}</span>
                         </td>
                         <td className="px-6 py-5">
@@ -576,12 +624,33 @@ const App: React.FC = () => {
                   })}
                   {filteredStudents.length === 0 && !loading && (
                     <tr>
-                      <td colSpan={8} className="px-6 py-32 text-center">
-                        <div className="flex flex-col items-center opacity-20">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                          </svg>
-                          <p className="text-xl font-black uppercase">Không có dữ liệu nhóm này</p>
+                      <td colSpan={10} className="px-6 py-20 text-center">
+                        <div className="flex flex-col items-center justify-center max-w-md mx-auto space-y-3">
+                          <div className="w-14 h-14 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center shadow-inner">
+                            <Search className="w-7 h-7" />
+                          </div>
+                          <p className="text-base font-black text-gray-800 uppercase">
+                            {listSearchTerm 
+                              ? `Không tìm thấy học sinh nào khớp với "${listSearchTerm}"` 
+                              : (listFilterGrade ? `Không có học sinh trong ${String(listFilterGrade).startsWith('Nhóm') ? listFilterGrade : `Nhóm ${listFilterGrade}`}` : 'Chưa có dữ liệu học sinh')}
+                          </p>
+                          <p className="text-xs text-gray-500 max-w-sm">
+                            {listSearchTerm 
+                              ? 'Hệ thống tìm kiếm không phân biệt chữ hoa/thường và không phân biệt dấu tiếng Việt. Bạn có thể gõ "hiep" để tìm "Hiệp".' 
+                              : 'Vui lòng chọn nhóm khác hoặc kiểm tra lại kết nối dữ liệu.'}
+                          </p>
+                          {(listSearchTerm || listFilterGrade) && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setListSearchTerm('');
+                                setListFilterGrade('');
+                              }}
+                              className="mt-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
+                            >
+                              Xoá bộ lọc tìm kiếm
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -602,6 +671,8 @@ const App: React.FC = () => {
               title="Ghi danh học sinh mới" 
               onSubmit={handleAddStudent}
               teacherSchedules={teacherSchedules}
+              existingGroups={activeGrades}
+              students={students}
             />
           </div>
         )}
@@ -621,19 +692,27 @@ const App: React.FC = () => {
                {/* Search and Filters for Update Tab */}
                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                  <div className="relative">
-                   <span className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                     <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                     </svg>
-                   </span>
-                   <input 
-                     type="text"
-                     placeholder="Tìm tên học sinh cần sửa..."
-                     value={updateSearchTerm}
-                     onChange={(e) => setUpdateSearchTerm(e.target.value)}
-                     className="w-full pl-11 pr-4 py-4 border border-gray-100 bg-slate-50/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm font-bold text-sm text-gray-700 transition-all"
-                   />
-                 </div>
+                    <span className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400">
+                      <Search className="h-4 w-4" />
+                    </span>
+                    <input 
+                      type="text"
+                      placeholder="Tìm theo tên học sinh, SĐT, nhóm, lớp (có hoặc không dấu)..."
+                      value={updateSearchTerm}
+                      onChange={(e) => setUpdateSearchTerm(e.target.value)}
+                      className="w-full pl-11 pr-10 py-4 border border-gray-100 bg-slate-50/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm font-bold text-sm text-gray-700 transition-all"
+                    />
+                    {updateSearchTerm && (
+                      <button
+                        type="button"
+                        onClick={() => setUpdateSearchTerm('')}
+                        className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-gray-700 cursor-pointer"
+                        title="Xoá tìm kiếm"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
                  <div className="relative">
                    <select 
                      value={updateFilterGrade}
@@ -642,7 +721,7 @@ const App: React.FC = () => {
                    >
                      <option value="">Lọc theo Nhóm</option>
                      {activeGrades.map((grade) => (
-                       <option key={grade} value={grade}>Nhóm {grade}</option>
+                       <option key={grade} value={grade}>{String(grade).startsWith('Nhóm') ? grade : `Nhóm ${grade}`}</option>
                      ))}
                    </select>
                  </div>
@@ -660,7 +739,7 @@ const App: React.FC = () => {
                     <option value="">-- Kết quả tìm thấy: {filteredForUpdate.length} học sinh --</option>
                     {filteredForUpdate.map((s, idx) => (
                       <option key={idx} value={s['HỌ TÊN HS']}>
-                        {s['HỌ TÊN HS']} (Nhóm {s['KHỐI']} - Lớp {s['TÊN LỚP']})
+                        {s['HỌ TÊN HS']} ({String(s['KHỐI']).startsWith('Nhóm') ? s['KHỐI'] : `Nhóm ${s['KHỐI']}`} - Lớp {s['TÊN LỚP']})
                       </option>
                     ))}
                  </select>
@@ -689,6 +768,8 @@ const App: React.FC = () => {
                   initialData={selectedForEdit}
                   onSubmit={handleUpdateStudent}
                   teacherSchedules={teacherSchedules}
+                  existingGroups={activeGrades}
+                  students={students}
                 />
               </div>
             )}
@@ -700,7 +781,7 @@ const App: React.FC = () => {
         )}
 
         {activeTab === 'teacherSchedule' && (
-          <TeacherScheduleComponent />
+          <TeacherScheduleComponent onRefresh={loadData} students={students} />
         )}
       </main>
 

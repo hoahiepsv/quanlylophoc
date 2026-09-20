@@ -30,7 +30,7 @@ function doPost(e) {
     const tz = ss.getSpreadsheetTimeZone();
     
     if (sheet.getLastRow() === 0) {
-      sheet.appendRow(['STT', 'KHỐI', 'NGÀY DẠY TRONG THÁNG']);
+      sheet.appendRow(['STT', 'TÊN NHÓM', 'KHỐI', 'NGÀY DẠY TRONG THÁNG']);
     }
 
     if (action === 'getData') {
@@ -60,9 +60,17 @@ function doPost(e) {
     
     if (action === 'addData') {
       const item = params.data;
+      if (item['TÊN NHÓM'] && !item['KHỐI']) item['KHỐI'] = item['TÊN NHÓM'];
+      if (item['KHỐI'] && !item['TÊN NHÓM']) item['TÊN NHÓM'] = item['KHỐI'];
+
       const lastRow = sheet.getLastRow();
-      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => h.toString().trim());
+      let headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => h.toString().trim());
       
+      if (!headers.includes('TÊN NHÓM')) {
+        sheet.getRange(1, headers.length + 1).setValue('TÊN NHÓM');
+        headers.push('TÊN NHÓM');
+      }
+
       const newRow = headers.map(h => {
         if (h === 'STT') return lastRow;
         return item[h] || '';
@@ -74,13 +82,21 @@ function doPost(e) {
     
     if (action === 'updateData') {
       const item = params.data;
+      if (item['TÊN NHÓM'] && !item['KHỐI']) item['KHỐI'] = item['TÊN NHÓM'];
+      if (item['KHỐI'] && !item['TÊN NHÓM']) item['TÊN NHÓM'] = item['KHỐI'];
+
       const rowIndex = parseInt(params.rowIndex);
       
       if (!rowIndex || isNaN(rowIndex)) {
         return createResponse({ success: false, message: 'Vị trí dòng không hợp lệ.' });
       }
       
-      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => h.toString().trim());
+      let headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => h.toString().trim());
+      if (!headers.includes('TÊN NHÓM')) {
+        sheet.getRange(1, headers.length + 1).setValue('TÊN NHÓM');
+        headers.push('TÊN NHÓM');
+      }
+
       const rowValues = headers.map(header => {
         let val = item[header];
         return (val !== undefined) ? val : '';
