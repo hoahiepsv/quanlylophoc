@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Student, TeacherSchedule } from '../types';
 
 interface StudentFormProps {
@@ -7,6 +7,8 @@ interface StudentFormProps {
   onSubmit: (data: Partial<Student>) => void;
   title: string;
   teacherSchedules?: TeacherSchedule[];
+  existingGroups?: string[];
+  students?: Student[];
 }
 
 // Hàm chuẩn hoá ngày an toàn để tránh nhảy ngày do múi giờ
@@ -18,7 +20,14 @@ const cleanDateStr = (val: any): string => {
   return dateObj.toLocaleDateString('en-CA');
 };
 
-const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title, teacherSchedules = [] }) => {
+const StudentForm: React.FC<StudentFormProps> = ({ 
+  initialData, 
+  onSubmit, 
+  title, 
+  teacherSchedules = [],
+  existingGroups = [],
+  students = []
+}) => {
   const [formData, setFormData] = useState<Partial<Student>>({
     'HỌ TÊN HS': '',
     'KHỐI': '',
@@ -33,6 +42,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
 
   const [isTutoring, setIsTutoring] = useState(false);
   const [isDroppedOut, setIsDroppedOut] = useState(false);
+  const [isCustomGroup, setIsCustomGroup] = useState(false);
 
   useEffect(() => {
     if (initialData) {
@@ -62,6 +72,59 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
   const [viewDate, setViewDate] = useState(new Date());
   const [absenceViewDate, setAbsenceViewDate] = useState(new Date());
   const [feeYear, setFeeYear] = useState(new Date().getFullYear());
+  const [selectedTeacherSchedule, setSelectedTeacherSchedule] = useState<string>('');
+
+  useEffect(() => {
+    if (formData['KHỐI'] && teacherSchedules.length > 0) {
+      const match = teacherSchedules.find(s => 
+        String(s['TÊN NHÓM'] || s['KHỐI']) === String(formData['KHỐI']) ||
+        String(s['KHỐI']) === String(formData['KHỐI'])
+      );
+      if (match) {
+        setSelectedTeacherSchedule(String(match['TÊN NHÓM'] || match['KHỐI']));
+      }
+    }
+  }, [formData['KHỐI'], teacherSchedules]);
+
+  const availableGroups = useMemo(() => {
+    const groupsSet = new Set<string>();
+    
+    // 1. Chỉ lấy các nhóm thực tế đang tồn tại từ danh sách học sinh
+    if (students && students.length > 0) {
+      students.forEach(s => {
+        const g = String(s['KHỐI'] || '').trim();
+        if (g && g !== 'undefined' && g !== 'null' && g !== 'Đã thôi học' && g !== 'Kèm riêng' && g !== 'Nhóm kèm riêng') {
+          groupsSet.add(g);
+        }
+      });
+    } else if (existingGroups && existingGroups.length > 0) {
+      existingGroups.forEach(g => {
+        const trimmed = String(g || '').trim();
+        if (trimmed && trimmed !== 'undefined' && trimmed !== 'null' && trimmed !== 'Đã thôi học' && trimmed !== 'Kèm riêng' && trimmed !== 'Nhóm kèm riêng') {
+          groupsSet.add(trimmed);
+        }
+      });
+    }
+
+    // 2. Thêm nhóm hiện tại của học sinh đang sửa nếu có
+    if (initialData?.['KHỐI']) {
+      const g = String(initialData['KHỐI']).trim();
+      if (g && g !== 'undefined' && g !== 'null' && g !== 'Đã thôi học' && g !== 'Kèm riêng' && g !== 'Nhóm kèm riêng') {
+        groupsSet.add(g);
+      }
+    }
+
+    // Tuyệt đối không lấy nhóm từ teacherSchedules (không hiện nhóm giáo viên)
+
+    return Array.from(groupsSet).sort((a, b) => {
+      const nA = parseInt(a);
+      const nB = parseInt(b);
+      if (!isNaN(nA) && !isNaN(nB)) return nA - nB;
+      if (!isNaN(nA)) return -1;
+      if (!isNaN(nB)) return 1;
+      return a.localeCompare(b, 'vi');
+    });
+  }, [students, existingGroups, initialData]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -87,36 +150,37 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
   };
 
   const handleInsertTeacherSchedule = () => {
-    const selectedKhoi = formData['KHỐI'];
     const startDate = formData['NGÀY BẮT ĐẦU'];
 
-    if (isDroppedOut || isTutoring) {
-      alert("Học sinh kèm riêng hoặc đã thôi học không có lịch dạy cố định theo nhóm!");
-      return;
-    }
-
-    if (!selectedKhoi) {
-      alert("Vui lòng chọn NHÓM trước khi chèn lịch dạy!");
-      return;
-    }
-
     if (!startDate) {
-      alert("Vui lòng chọn NGÀY BẮT ĐẦU học!");
+      alert("Vui lòng chọn NGÀY BẮT ĐẦU học của học sinh trước khi chèn lịch dạy!");
       return;
     }
 
-    const teacherSched = teacherSchedules.find(s => String(s['KHỐI']) === String(selectedKhoi));
+    const schedKey = selectedTeacherSchedule || formData['KHỐI'];
+
+    if (!schedKey) {
+      alert("Vui lòng chọn một lịch dạy của giáo viên trong danh sách để chèn!");
+      return;
+    }
+
+    const teacherSched = teacherSchedules.find(s => 
+      String(s['TÊN NHÓM'] || s['KHỐI']) === String(schedKey) ||
+      String(s['KHỐI']) === String(schedKey) ||
+      String(s['TÊN NHÓM']) === String(schedKey)
+    );
     
     if (!teacherSched) {
-      alert(`Không tìm thấy lịch dạy cho Nhóm ${selectedKhoi} trong hệ thống!`);
+      alert(`Không tìm thấy lịch dạy "${schedKey}" trong hệ thống!`);
       return;
     }
 
-    const teacherDates = (teacherSched['NGÀY DẠY TRONG THÁNG'] || '').split(' ').filter(d => d);
-    const validDates = teacherDates.filter(d => d >= (startDate as string)).map(d => cleanDateStr(d));
+    const cleanStart = cleanDateStr(startDate);
+    const teacherDates = (teacherSched['NGÀY DẠY TRONG THÁNG'] || '').split(' ').filter(d => d).map(d => cleanDateStr(d));
+    const validDates = teacherDates.filter(d => d >= cleanStart);
 
     if (validDates.length === 0) {
-      alert("Lịch dạy của giáo viên nhóm này không có ngày nào sau ngày bắt đầu của học sinh!");
+      alert(`Lịch dạy "${schedKey}" không có buổi nào kể từ ngày bắt đầu (${cleanStart}) của học sinh!`);
       return;
     }
 
@@ -124,7 +188,7 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
     const combined = Array.from(new Set([...currentSchedule, ...validDates])).sort();
 
     setFormData(prev => ({ ...prev, 'LỊCH HỌC': combined.join(' ') }));
-    alert(`Đã tự động thêm ${validDates.length} buổi dạy dựa trên lịch dạy Nhóm ${selectedKhoi}!`);
+    alert(`Đã chèn thành công ${validDates.length} buổi dạy từ lịch "${schedKey}" vào lịch học của học sinh!`);
   };
 
   const handleClearSchedule = () => {
@@ -165,6 +229,13 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
       submissionData['KHỐI'] = "Đã thôi học";
     } else if (isTutoring) {
       submissionData['KHỐI'] = "Kèm riêng";
+    } else {
+      const finalKhoi = String(formData['KHỐI'] || '').trim();
+      if (!finalKhoi) {
+        alert("Vui lòng chọn hoặc nhập tên NHÓM (KHỐI) cho học sinh!");
+        return;
+      }
+      submissionData['KHỐI'] = finalKhoi;
     }
     
     onSubmit(submissionData);
@@ -244,24 +315,79 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
                   required
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                  <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1.5">NHÓM (KHỐI)</label>
-                  <select 
-                    name="KHỐI" 
-                    value={formData['KHỐI']} 
-                    onChange={handleChange}
-                    disabled={isDroppedOut || isTutoring}
-                    className={`w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium ${(isDroppedOut || isTutoring) ? 'bg-gray-100 text-gray-400 opacity-50' : ''}`}
-                  >
-                    <option value="">{isDroppedOut ? 'Đã thôi học' : (isTutoring ? 'Kèm riêng' : 'Chọn nhóm')}</option>
-                    {[...Array(12)].map((_, i) => (
-                      <option key={i+1} value={i+1}>Nhóm {i+1}</option>
-                    ))}
-                  </select>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold text-gray-700 uppercase">
+                      {isCustomGroup ? 'TẠO NHÓM MỚI (LƯU CỘT KHỐI)' : 'NHÓM (KHỐI)'}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextState = !isCustomGroup;
+                        setIsCustomGroup(nextState);
+                        if (nextState) {
+                          setFormData(prev => ({ ...prev, 'KHỐI': '' }));
+                        }
+                      }}
+                      disabled={isDroppedOut || isTutoring}
+                      className="text-[10px] font-black text-blue-600 hover:text-blue-800 transition-colors flex items-center gap-1 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-lg border border-blue-200 active:scale-95 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+                    >
+                      {isCustomGroup ? (
+                        <span>↩ Chọn nhóm có sẵn</span>
+                      ) : (
+                        <span>+ Tạo nhóm mới</span>
+                      )}
+                    </button>
+                  </div>
+
+                  {isCustomGroup ? (
+                    <div>
+                      <input 
+                        name="KHỐI" 
+                        value={formData['KHỐI'] || ''} 
+                        onChange={handleChange}
+                        disabled={isDroppedOut || isTutoring}
+                        placeholder="Gõ tên nhóm mới (VD: Nhóm 13, Toán 9A...)"
+                        className={`w-full px-4 py-3 border-2 border-blue-400 bg-blue-50/20 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-bold text-blue-900 shadow-inner ${(isDroppedOut || isTutoring) ? 'bg-gray-100 text-gray-400 opacity-50' : ''}`}
+                        autoFocus
+                      />
+                      <p className="text-[10px] text-blue-600 font-medium mt-1 flex items-center gap-1">
+                        <span>💡</span>
+                        <span>Tên nhóm này sẽ được lưu trực tiếp vào cột <strong>KHỐI</strong> trên Google Sheet.</span>
+                      </p>
+                    </div>
+                  ) : (
+                    <select 
+                      name="KHỐI" 
+                      value={formData['KHỐI']} 
+                      onChange={(e) => {
+                        if (e.target.value === '__CREATE_NEW_GROUP__') {
+                          setIsCustomGroup(true);
+                          setFormData(prev => ({ ...prev, 'KHỐI': '' }));
+                        } else {
+                          handleChange(e);
+                        }
+                      }}
+                      disabled={isDroppedOut || isTutoring}
+                      className={`w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium ${(isDroppedOut || isTutoring) ? 'bg-gray-100 text-gray-400 opacity-50' : ''}`}
+                    >
+                      <option value="">
+                        {isDroppedOut ? 'Đã thôi học' : (isTutoring ? 'Kèm riêng' : (availableGroups.length === 0 ? '-- Chưa có nhóm (Bấm Tạo nhóm mới) --' : '-- Chọn nhóm đã có --'))}
+                      </option>
+                      {availableGroups.map((g) => (
+                        <option key={g} value={g}>
+                          {String(g).startsWith('Nhóm') ? g : `Nhóm ${g}`}
+                        </option>
+                      ))}
+                      <option value="__CREATE_NEW_GROUP__" className="font-black text-blue-600 bg-blue-50">
+                        ✨ + Tạo nhóm mới (gõ tên riêng)...
+                      </option>
+                    </select>
+                  )}
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1.5">TÊN LỚP</label>
+                  <label className="block text-xs font-bold text-gray-700 mb-1.5 uppercase">TÊN LỚP</label>
                   <input 
                     name="TÊN LỚP" 
                     value={formData['TÊN LỚP']} 
@@ -345,37 +471,97 @@ const StudentForm: React.FC<StudentFormProps> = ({ initialData, onSubmit, title,
             </div>
 
             <div className="space-y-4">
-              <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest flex flex-col gap-2">
-                <div className="flex justify-between items-center w-full">
-                  <span>LỊCH HỌC</span>
-                  <div className="flex gap-3">
-                    <span className="text-emerald-600 lowercase font-medium">Đã dạy: {attendedCount} buổi</span>
-                    <span className="text-blue-600 lowercase font-medium">Đã chọn: {selectedCount} buổi</span>
+              <div className="flex justify-between items-center w-full">
+                <span className="text-sm font-bold text-gray-700 uppercase tracking-wider">LỊCH HỌC DỰ KIẾN</span>
+                <div className="flex gap-3 text-xs">
+                  <span className="text-emerald-600 font-bold">Đã dạy: {attendedCount} buổi</span>
+                  <span className="text-blue-600 font-bold">Đã chọn: {selectedCount} buổi</span>
+                </div>
+              </div>
+
+              {/* Ô chọn lịch dạy của giáo viên để chèn */}
+              <div className="bg-indigo-50/70 p-3.5 rounded-2xl border border-indigo-100 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="select-teacher-schedule-insert" className="block text-xs font-black text-indigo-900 uppercase tracking-wider">
+                    Chọn lịch dạy của giáo viên để chèn:
+                  </label>
+                  {selectedTeacherSchedule && (
+                    <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-md">
+                      Đang chọn: {selectedTeacherSchedule}
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                  <div className="sm:col-span-7">
+                    <select
+                      id="select-teacher-schedule-insert"
+                      value={selectedTeacherSchedule}
+                      onChange={(e) => setSelectedTeacherSchedule(e.target.value)}
+                      className="w-full px-3 py-2.5 border border-indigo-200 bg-white rounded-xl text-xs font-bold text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs"
+                    >
+                      <option value="">-- Chọn lịch dạy để chèn --</option>
+                      {teacherSchedules.map((s, idx) => {
+                        const name = s['TÊN NHÓM'] || s['KHỐI'] || `Lịch ${idx + 1}`;
+                        const count = (s['NGÀY DẠY TRONG THÁNG'] || '').split(' ').filter(d => d).length;
+                        return (
+                          <option key={idx} value={name}>
+                            {name} ({count} buổi dự kiến)
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+
+                  <div className="sm:col-span-3">
+                    <button
+                      type="button"
+                      id="btn-insert-teacher-schedule"
+                      onClick={handleInsertTeacherSchedule}
+                      disabled={!selectedTeacherSchedule && !formData['KHỐI']}
+                      className={`w-full py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95 ${
+                        (selectedTeacherSchedule || formData['KHỐI'])
+                          ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                          : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                      }`}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      Chèn lịch dạy
+                    </button>
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <button
+                      type="button"
+                      id="btn-clear-student-schedule"
+                      onClick={handleClearSchedule}
+                      className="w-full py-2.5 bg-white hover:bg-red-50 text-red-600 border border-red-200 rounded-xl text-xs font-bold uppercase transition-all flex items-center justify-center gap-1 shadow-2xs active:scale-95"
+                      title="Xoá toàn bộ lịch học của học sinh"
+                    >
+                      Xoá hết
+                    </button>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={handleInsertTeacherSchedule}
-                    className="py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-sm active:scale-95"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    Chèn lịch dạy
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleClearSchedule}
-                    className="py-2.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-sm active:scale-95"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                    Xoá hết lịch học
-                  </button>
-                </div>
-              </h3>
+
+                {selectedTeacherSchedule && (() => {
+                  const target = teacherSchedules.find(s => 
+                    String(s['TÊN NHÓM'] || s['KHỐI']) === String(selectedTeacherSchedule) ||
+                    String(s['KHỐI']) === String(selectedTeacherSchedule)
+                  );
+                  if (!target) return null;
+                  const allDates = (target['NGÀY DẠY TRONG THÁNG'] || '').split(' ').filter(d => d);
+                  const validCount = formData['NGÀY BẮT ĐẦU'] 
+                    ? allDates.filter(d => cleanDateStr(d) >= cleanDateStr(formData['NGÀY BẮT ĐẦU'])).length
+                    : allDates.length;
+                  return (
+                    <p className="text-[11px] text-indigo-700 font-semibold">
+                      💡 Lịch "{selectedTeacherSchedule}" có {allDates.length} buổi dự kiến {formData['NGÀY BẮT ĐẦU'] ? `(trong đó có ${validCount} buổi kể từ ngày bắt đầu ${formData['NGÀY BẮT ĐẦU']})` : ''}.
+                    </p>
+                  );
+                })()}
+              </div>
               <div className="border border-gray-100 rounded-2xl p-4 bg-slate-50 shadow-inner">
                 <div className="flex justify-between items-center mb-4">
                   <button type="button" onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() - 1))} className="p-1 hover:bg-gray-200 rounded-full"><svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg></button>

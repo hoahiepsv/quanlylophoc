@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { Student } from '../types';
+import { matchStudentSearch } from '../utils';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import html2canvas from 'html2canvas';
 import { geminiService } from '../services/geminiService';
@@ -146,7 +147,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
   const filteredStudentsForReport = useMemo(() => {
     return students.filter(s => {
       const matchGrade = !reportFilterGrade || String(s['KHỐI']) === reportFilterGrade;
-      const matchSearch = !reportSearchTerm || (s['HỌ TÊN HS'] || '').toLowerCase().includes(reportSearchTerm.toLowerCase());
+      const matchSearch = matchStudentSearch(s, reportSearchTerm);
       return matchGrade && matchSearch;
     });
   }, [students, reportFilterGrade, reportSearchTerm]);
@@ -1054,7 +1055,9 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
                   className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-1 text-[11px] font-black text-blue-800 outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Tất cả</option>
-                  {activeGradesForFilter.map(g => <option key={g} value={g}>Nhóm {g}</option>)}
+                  {activeGradesForFilter.map(g => (
+                    <option key={g} value={g}>{String(g).startsWith('Nhóm') ? g : `Nhóm ${g}`}</option>
+                  ))}
                 </select>
              </div>
           </div>
@@ -1170,11 +1173,21 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
             </span>
             <input 
               type="text"
-              placeholder="Tìm tên học sinh..."
+              placeholder="Tìm theo tên học sinh, SĐT, lớp (có hoặc không dấu)..."
               value={reportSearchTerm}
               onChange={(e) => setReportSearchTerm(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 border border-gray-100 bg-slate-50/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm font-bold text-sm text-gray-700 transition-all"
+              className="w-full pl-11 pr-10 py-3 border border-gray-100 bg-slate-50/50 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm font-bold text-sm text-gray-700 transition-all"
             />
+            {reportSearchTerm && (
+              <button
+                type="button"
+                onClick={() => setReportSearchTerm('')}
+                className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-gray-700 font-bold text-xs"
+                title="Xoá tìm kiếm"
+              >
+                ✕
+              </button>
+            )}
           </div>
           <div className="relative">
             <select 
@@ -1187,7 +1200,7 @@ const Statistics: React.FC<StatisticsProps> = ({ students }) => {
             >
               <option value="">Tất cả Nhóm</option>
               {activeGradesForFilter.map((grade) => (
-                <option key={grade} value={grade}>Nhóm {grade}</option>
+                <option key={grade} value={grade}>{String(grade).startsWith('Nhóm') ? grade : `Nhóm ${grade}`}</option>
               ))}
             </select>
           </div>
