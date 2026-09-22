@@ -5,6 +5,7 @@ import { Student, TeacherSchedule } from '../types';
 interface StudentFormProps {
   initialData?: Partial<Student>;
   onSubmit: (data: Partial<Student>) => void;
+  onDelete?: (student: Partial<Student>) => void;
   title: string;
   teacherSchedules?: TeacherSchedule[];
   existingGroups?: string[];
@@ -23,6 +24,7 @@ const cleanDateStr = (val: any): string => {
 const StudentForm: React.FC<StudentFormProps> = ({ 
   initialData, 
   onSubmit, 
+  onDelete,
   title, 
   teacherSchedules = [],
   existingGroups = [],
@@ -294,10 +296,26 @@ const StudentForm: React.FC<StudentFormProps> = ({
 
   return (
     <div className="bg-white p-6 rounded-2xl shadow-xl border border-blue-50">
-      <h2 className="text-2xl font-black text-blue-900 mb-8 border-b pb-4 flex items-center gap-3">
-        <div className="w-2 h-8 bg-blue-600 rounded-full"></div>
-        {title}
-      </h2>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 border-b pb-4">
+        <h2 className="text-2xl font-black text-blue-900 flex items-center gap-3">
+          <div className="w-2 h-8 bg-blue-600 rounded-full"></div>
+          {title}
+        </h2>
+        {onDelete && initialData?.rowIndex && (
+          <button
+            type="button"
+            id="btn-delete-student-top"
+            onClick={() => onDelete(formData)}
+            className="self-start sm:self-auto px-4 py-2.5 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 hover:border-red-600 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all shadow-xs active:scale-95 cursor-pointer"
+            title="Xóa toàn bộ ký tự của học sinh này trên Datasheet và bỏ trống các ô"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Xóa học sinh
+          </button>
+        )}
+      </div>
       
       <form className="space-y-8" onSubmit={handleFormSubmit}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
@@ -635,15 +653,31 @@ const StudentForm: React.FC<StudentFormProps> = ({
           </div>
         </div>
 
-        <div className="pt-10">
+        <div className="pt-10 flex flex-col sm:flex-row items-center gap-4">
+          {onDelete && initialData?.rowIndex && (
+            <button
+              type="button"
+              id="btn-delete-student-bottom"
+              onClick={() => onDelete(formData)}
+              className="w-full sm:w-auto px-8 py-5 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border-2 border-red-200 hover:border-red-600 font-black rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 active:scale-[0.98] order-2 sm:order-1 cursor-pointer"
+              title="Xóa toàn bộ ký tự của học sinh này trên Datasheet và bỏ trống các ô"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              XÓA HỌC SINH
+            </button>
+          )}
+
           <button 
             type="submit" 
-            className="w-full bg-blue-700 hover:bg-blue-800 text-white font-black py-5 rounded-2xl shadow-xl transition-all transform hover:-translate-y-1 flex items-center justify-center gap-3 active:scale-[0.98]"
+            id="btn-submit-student"
+            className="flex-1 w-full bg-blue-700 hover:bg-blue-800 text-white font-black py-5 rounded-2xl shadow-xl transition-all transform hover:-translate-y-1 flex items-center justify-center gap-3 active:scale-[0.98] order-1 sm:order-2 cursor-pointer"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
             </svg>
-            CẬP NHẬT DỮ LIỆU HỆ THỐNG
+            {initialData?.rowIndex ? 'LƯU CẬP NHẬT DỮ LIỆU' : 'GHI DANH HỌC SINH MỚI'}
           </button>
         </div>
       </form>
