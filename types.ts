@@ -26,4 +26,4 @@ export enum ModelMode {
   PRO = 'gemini-3-pro-preview'
 }
 
-export type TabType = 'list' | 'add' | 'update' | 'stats' | 'teacherSchedule' | 'attendance';
+export type TabType = 'list' | 'attendance' | 'tuition' | 'add' | 'update' | 'stats' | 'teacherSchedule';

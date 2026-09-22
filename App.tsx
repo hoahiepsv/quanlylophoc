@@ -6,8 +6,9 @@ import StudentForm from './components/StudentForm';
 import Statistics from './components/Statistics';
 import TeacherScheduleComponent from './components/TeacherSchedule';
 import Attendance from './components/Attendance';
+import TuitionManagement from './components/TuitionManagement';
 import StudentReportModal from './components/StudentReportModal';
-import { ExternalLink, Search, X } from 'lucide-react';
+import { ExternalLink, Search, X, Trash2, AlertTriangle, Loader2 } from 'lucide-react';
 import { removeVietnameseTones, normalizeSearchText, matchStudentSearch } from './utils';
 
 const App: React.FC = () => {
@@ -28,6 +29,8 @@ const App: React.FC = () => {
   const [tempSelection, setTempSelection] = useState<string>('');
   const [selectedForEdit, setSelectedForEdit] = useState<Student | null>(null);
   const [selectedStudentForReport, setSelectedStudentForReport] = useState<Student | null>(null);
+  const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Filter State for List Tab
   const [listFilterGrade, setListFilterGrade] = useState<string>('');
@@ -143,7 +146,11 @@ const App: React.FC = () => {
         apiService.getStudents(),
         apiService.getTeacherSchedules()
       ]);
-      setStudents(Array.isArray(studentData) ? studentData : []);
+      // Lọc bỏ các dòng trống (đã bị xóa bỏ nội dung ô) trên datasheet
+      const cleanStudents = (Array.isArray(studentData) ? studentData : []).filter(
+        s => s && String(s['HỌ TÊN HS'] || '').trim() !== ''
+      );
+      setStudents(cleanStudents);
       setTeacherSchedules(Array.isArray(teacherData) ? teacherData : []);
     } catch (error: any) {
       console.error("Lỗi đồng bộ dữ liệu:", error);
@@ -197,6 +204,58 @@ const App: React.FC = () => {
       alert("Lỗi cập nhật: " + error.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Xác nhận xóa toàn bộ thông tin học sinh và để trống ô trên Datasheet
+  const handleConfirmDelete = async () => {
+    if (!studentToDelete?.rowIndex) {
+      alert("Không tìm thấy vị trí dòng (rowIndex) của học sinh để xóa trên Datasheet!");
+      setStudentToDelete(null);
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const studentName = studentToDelete['HỌ TÊN HS'] || 'học sinh';
+      await apiService.clearStudent(studentToDelete.rowIndex, studentToDelete);
+      alert(`Đã xóa toàn bộ thông tin của học sinh "${studentName}" và để trống các ô trên Datasheet thành công!`);
+      
+      setStudentToDelete(null);
+      setSelectedForEdit(null);
+      setTempSelection('');
+      await loadData();
+      setActiveTab('list');
+    } catch (error: any) {
+      console.error("Lỗi xóa học sinh:", error);
+      alert("Lỗi khi xóa học sinh trên Datasheet: " + error.message);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleDeleteStudentRequest = (studentData?: Partial<Student>) => {
+    if (studentData) {
+      const fullStudent = students.find(s => 
+        (studentData.rowIndex && s.rowIndex === studentData.rowIndex) ||
+        (studentData['HỌ TÊN HS'] && s['HỌ TÊN HS'] === studentData['HỌ TÊN HS'])
+      ) || (studentData as Student);
+      setStudentToDelete(fullStudent);
+      return;
+    }
+
+    if (selectedForEdit) {
+      setStudentToDelete(selectedForEdit);
+      return;
+    }
+
+    if (tempSelection) {
+      const student = students.find(s => s['HỌ TÊN HS'] === tempSelection);
+      if (student) {
+        setStudentToDelete(student);
+      } else {
+        alert("Vui lòng chọn học sinh hợp lệ!");
+      }
     }
   };
 
@@ -403,6 +462,7 @@ const App: React.FC = () => {
             {[
               { id: 'list', label: 'Danh sách học sinh', icon: 'M4 6h16M4 10h16M4 14h16M4 18h16' },
               { id: 'attendance', label: 'Điểm danh', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' },
+              { id: 'tuition', label: 'Học phí', icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
               { id: 'add', label: 'Thêm học sinh', icon: 'M12 4v16m8-8H4' },
               { id: 'update', label: 'Cập nhật thông tin', icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z' },
               { id: 'stats', label: 'Thống kê', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
@@ -665,6 +725,10 @@ const App: React.FC = () => {
           <Attendance students={students} onRefresh={loadData} />
         )}
 
+        {activeTab === 'tuition' && (
+          <TuitionManagement students={students} onRefresh={loadData} />
+        )}
+
         {activeTab === 'add' && (
           <div className="max-w-5xl mx-auto">
             <StudentForm 
@@ -750,13 +814,36 @@ const App: React.FC = () => {
                     else alert("Vui lòng chọn học sinh hợp lệ!");
                   }}
                   disabled={!tempSelection}
-                  className={`px-8 py-4 rounded-xl font-black shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 ${
+                  className={`px-8 py-4 rounded-xl font-black shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer ${
                     tempSelection 
                     ? 'bg-blue-700 text-white hover:bg-blue-800' 
                     : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                   }`}
                  >
                    MỞ BIỂU MẪU CẬP NHẬT
+                 </button>
+
+                 <button
+                  type="button"
+                  id="btn-delete-student-update-tab"
+                  onClick={() => {
+                    const student = students.find(s => s['HỌ TÊN HS'] === tempSelection) || selectedForEdit;
+                    if (student) {
+                      handleDeleteStudentRequest(student);
+                    } else {
+                      alert("Vui lòng chọn học sinh cần xóa trong danh sách!");
+                    }
+                  }}
+                  disabled={!tempSelection && !selectedForEdit}
+                  className={`px-6 py-4 rounded-xl font-black shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer ${
+                    tempSelection || selectedForEdit
+                    ? 'bg-red-600 hover:bg-red-700 text-white shadow-red-200' 
+                    : 'bg-gray-100 text-gray-300 cursor-not-allowed'
+                  }`}
+                  title="Xóa học sinh này và bỏ trống các ô trong Datasheet"
+                 >
+                   <Trash2 className="h-5 w-5" />
+                   XÓA HỌC SINH
                  </button>
                </div>
             </div>
@@ -767,6 +854,7 @@ const App: React.FC = () => {
                   title={`Hiệu chỉnh: ${selectedForEdit['HỌ TÊN HS']}`} 
                   initialData={selectedForEdit}
                   onSubmit={handleUpdateStudent}
+                  onDelete={handleDeleteStudentRequest}
                   teacherSchedules={teacherSchedules}
                   existingGroups={activeGrades}
                   students={students}
@@ -801,6 +889,85 @@ const App: React.FC = () => {
           </div>
         </div>
       </footer>
+
+      {/* Modal xác nhận xóa học sinh & bỏ trống ô Datasheet */}
+      {studentToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-red-100 animate-scaleUp">
+            <div className="flex items-center gap-3.5 mb-5 text-red-600">
+              <div className="p-3 bg-red-100 rounded-2xl">
+                <Trash2 className="h-7 w-7 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-gray-900 tracking-tight">XÁC NHẬN XÓA HỌC SINH</h3>
+                <p className="text-xs text-red-600 font-bold uppercase tracking-wider">Hành động này không thể hoàn tác</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 rounded-2xl p-4 border border-gray-100 mb-5 space-y-2.5">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-gray-500 font-bold">Họ và tên:</span>
+                <span className="font-black text-blue-900 text-base">{studentToDelete['HỌ TÊN HS']}</span>
+              </div>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-gray-500 font-bold">Nhóm / Lớp:</span>
+                <span className="font-bold text-gray-800">
+                  {String(studentToDelete['KHỐI']).startsWith('Nhóm') ? studentToDelete['KHỐI'] : `Nhóm ${studentToDelete['KHỐI']}`} - Lớp {studentToDelete['TÊN LỚP']}
+                </span>
+              </div>
+              {studentToDelete['SỐ ĐIỆN THOẠI 1'] && (
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-500 font-bold">Số điện thoại:</span>
+                  <span className="font-mono font-bold text-gray-700">{studentToDelete['SỐ ĐIỆN THOẠI 1']}</span>
+                </div>
+              )}
+              <div className="flex justify-between items-center text-xs pt-2 border-t border-gray-200/60">
+                <span className="text-gray-400 font-semibold">Vị trí Datasheet:</span>
+                <span className="font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
+                  Dòng {studentToDelete.rowIndex || 'N/A'}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-amber-50 rounded-2xl border border-amber-200 mb-6 flex gap-3 items-start">
+              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-900 leading-relaxed font-semibold">
+                Ứng dụng sẽ xóa toàn bộ ký tự thông tin của học sinh này ở tất cả các ô trong Datasheet (Google Sheets) và bỏ trống các ô đó theo đúng yêu cầu.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setStudentToDelete(null)}
+                disabled={isDeleting}
+                className="px-5 py-3 rounded-xl font-bold text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 transition-all cursor-pointer"
+              >
+                HỦY BỎ
+              </button>
+              <button
+                type="button"
+                id="btn-confirm-delete-student"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+                className="px-6 py-3 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white font-black text-sm rounded-xl shadow-lg shadow-red-200 transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    ĐANG XÓA...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4" />
+                    XÁC NHẬN XÓA
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {selectedStudentForReport && (
         <StudentReportModal 
