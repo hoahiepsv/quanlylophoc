@@ -8,12 +8,15 @@ import TeacherScheduleComponent from './components/TeacherSchedule';
 import Attendance from './components/Attendance';
 import TuitionManagement from './components/TuitionManagement';
 import StudentReportModal from './components/StudentReportModal';
-import { ExternalLink, Search, X, Trash2, AlertTriangle, Loader2 } from 'lucide-react';
+import { ExternalLink, Search, X, Trash2, AlertTriangle, Loader2, RefreshCw, LogOut, CheckCircle2, Zap } from 'lucide-react';
 import { removeVietnameseTones, normalizeSearchText, matchStudentSearch } from './utils';
 
 const App: React.FC = () => {
   // Authentication & Settings
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    return localStorage.getItem('QL_LOGGED_IN') === 'true';
+  });
+  const [rememberLogin, setRememberLogin] = useState(true);
   const [user, setUser] = useState({ username: '', password: '' });
   const [modelMode, setModelMode] = useState<ModelMode>(ModelMode.FLASH);
   const [showSettings, setShowSettings] = useState(false);
@@ -21,10 +24,14 @@ const App: React.FC = () => {
   // API Key State (Manual insertion for cross-browser support)
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('GEMINI_API_KEY') || '');
 
-  // Data State
-  const [students, setStudents] = useState<Student[]>([]);
-  const [teacherSchedules, setTeacherSchedules] = useState<TeacherSchedule[]>([]);
+  // Local Cache & Data State
+  const initialCache = useMemo(() => apiService.getCachedData(), []);
+  const [students, setStudents] = useState<Student[]>(() => initialCache.students || []);
+  const [teacherSchedules, setTeacherSchedules] = useState<TeacherSchedule[]>(() => initialCache.teacherSchedules || []);
+  const [lastSyncTime, setLastSyncTime] = useState<string>(() => initialCache.lastSync || '');
   const [loading, setLoading] = useState(false);
+  const [isBackgroundSyncing, setIsBackgroundSyncing] = useState(false);
+  const [isPreloadReady, setIsPreloadReady] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('list');
   const [tempSelection, setTempSelection] = useState<string>('');
   const [selectedForEdit, setSelectedForEdit] = useState<Student | null>(null);
@@ -39,6 +46,16 @@ const App: React.FC = () => {
   // Filter State for Update Tab
   const [updateSearchTerm, setUpdateSearchTerm] = useState('');
   const [updateFilterGrade, setUpdateFilterGrade] = useState('');
+
+  // Tải trước dữ liệu ngầm ngay khi mở ứng dụng (kể cả khi đang ở màn hình đăng nhập)
+  useEffect(() => {
+    apiService.preloadData().then(res => {
+      setIsPreloadReady(true);
+      if (res.syncTime) setLastSyncTime(res.syncTime);
+    }).catch(e => {
+      console.warn("Preload ngầm:", e);
+    });
+  }, []);
 
   // Sync API Key to global process.env for Gemini SDK
   useEffect(() => {
@@ -139,41 +156,71 @@ const App: React.FC = () => {
     return colors[index];
   };
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (force = false) => {
+    // Nếu chưa có dữ liệu trong RAM/cache thì hiện loader toàn trang, ngược lại đồng bộ ngầm
+    const hasData = students.length > 0;
+    if (!hasData) {
+      setLoading(true);
+    } else {
+      setIsBackgroundSyncing(true);
+    }
+
     try {
-      const [studentData, teacherData] = await Promise.all([
-        apiService.getStudents(),
-        apiService.getTeacherSchedules()
-      ]);
-      // Lọc bỏ các dòng trống (đã bị xóa bỏ nội dung ô) trên datasheet
-      const cleanStudents = (Array.isArray(studentData) ? studentData : []).filter(
-        s => s && String(s['HỌ TÊN HS'] || '').trim() !== ''
-      );
-      setStudents(cleanStudents);
-      setTeacherSchedules(Array.isArray(teacherData) ? teacherData : []);
+      const result = await apiService.fetchAllData(force);
+      setStudents(result.students);
+      setTeacherSchedules(result.teacherSchedules);
+      if (result.syncTime) setLastSyncTime(result.syncTime);
     } catch (error: any) {
       console.error("Lỗi đồng bộ dữ liệu:", error);
-      alert(error.message || "Lỗi tải dữ liệu. Vui lòng kiểm tra Apps Script.");
-      setStudents([]);
+      if (!hasData) {
+        alert(error.message || "Lỗi tải dữ liệu. Vui lòng kiểm tra Apps Script.");
+        setStudents([]);
+      }
     } finally {
       setLoading(false);
+      setIsBackgroundSyncing(false);
     }
-  }, []);
+  }, [students.length]);
 
   useEffect(() => {
     if (isLoggedIn) {
-      loadData();
+      // Khi đã đăng nhập, tự động đồng bộ ngầm phiên bản mới nhất từ Google Sheets
+      loadData(false);
     }
   }, [isLoggedIn, loadData]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (user.username === 'lehoahiep' && user.password === 'Lhh249111') {
+      if (rememberLogin) {
+        localStorage.setItem('QL_LOGGED_IN', 'true');
+      } else {
+        localStorage.removeItem('QL_LOGGED_IN');
+      }
       setIsLoggedIn(true);
+
+      // Nếu máy chưa có dữ liệu cache từ trước, nhanh chóng hoàn thành việc nạp từ preload
+      if (students.length === 0) {
+        setLoading(true);
+        try {
+          const res = await apiService.preloadData();
+          setStudents(res.students);
+          setTeacherSchedules(res.teacherSchedules);
+          if (res.syncTime) setLastSyncTime(res.syncTime);
+        } catch (err: any) {
+          console.error("Lỗi nạp dữ liệu sau đăng nhập:", err);
+        } finally {
+          setLoading(false);
+        }
+      }
     } else {
       alert("Sai tài khoản hoặc mật khẩu!");
     }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('QL_LOGGED_IN');
+    setIsLoggedIn(false);
   };
 
   const handleAddStudent = async (data: Partial<Student>) => {
@@ -181,27 +228,64 @@ const App: React.FC = () => {
     try {
       await apiService.saveStudent('addData', data);
       alert("Đã thêm học sinh thành công!");
-      await loadData();
+      
+      // Cập nhật lạc quan (Optimistic) vào state và bộ nhớ đệm cục bộ ngay tức thì
+      setStudents(prev => {
+        const maxRow = prev.length > 0 ? Math.max(...prev.map(s => Number(s.rowIndex) || 0)) : 1;
+        const newStu: Student = {
+          ...data,
+          rowIndex: maxRow + 1,
+          'STT': maxRow,
+          'HỌ TÊN HS': String(data['HỌ TÊN HS'] || ''),
+          'KHỐI': String(data['KHỐI'] || ''),
+          'TÊN LỚP': String(data['TÊN LỚP'] || ''),
+          'SỐ ĐIỆN THOẠI 1': String(data['SỐ ĐIỆN THOẠI 1'] || ''),
+          'SỐ ĐIỆN THOẠI 2': String(data['SỐ ĐIỆN THOẠI 2'] || ''),
+          'NGÀY BẮT ĐẦU': String(data['NGÀY BẮT ĐẦU'] || ''),
+          'LỊCH HỌC': String(data['LỊCH HỌC'] || ''),
+          'ĐIỂM DANH HS': String(data['ĐIỂM DANH HS'] || ''),
+          'ĐÓNG HỌC PHÍ': String(data['ĐÓNG HỌC PHÍ'] || '')
+        };
+        const updated = [...prev, newStu];
+        apiService.setCachedData(updated);
+        return updated;
+      });
+
       setActiveTab('list');
+      // Đồng bộ ngầm để xác thực với Google Sheets
+      loadData(true);
     } catch (error: any) {
-      alert("Không thể thêm: " + error.message);
+      console.error("Lỗi khi thêm học sinh mới:", error);
+      alert("Lỗi khi lưu dữ liệu mới: " + error.message);
     } finally {
       setLoading(false);
     }
   };
 
   const handleUpdateStudent = async (data: Partial<Student>) => {
-    if (!selectedForEdit?.rowIndex) return;
+    if (!selectedForEdit?.rowIndex) {
+      alert("Lỗi: Không tìm thấy vị trí dòng (rowIndex) của học sinh để cập nhật!");
+      return;
+    }
     setLoading(true);
     try {
       await apiService.saveStudent('updateData', data, selectedForEdit.rowIndex);
       alert("Cập nhật thông tin thành công!");
-      await loadData();
+
+      // Cập nhật lạc quan vào state và cache
+      setStudents(prev => {
+        const updated = prev.map(s => s.rowIndex === selectedForEdit.rowIndex ? { ...s, ...data } : s);
+        apiService.setCachedData(updated);
+        return updated;
+      });
+
       setActiveTab('list');
       setSelectedForEdit(null);
       setTempSelection('');
+      loadData(true);
     } catch (error: any) {
-      alert("Lỗi cập nhật: " + error.message);
+      console.error("Lỗi cập nhật học sinh:", error);
+      alert("Lỗi khi lưu dữ liệu cập nhật: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -224,7 +308,7 @@ const App: React.FC = () => {
       setStudentToDelete(null);
       setSelectedForEdit(null);
       setTempSelection('');
-      await loadData();
+      await loadData(true);
       setActiveTab('list');
     } catch (error: any) {
       console.error("Lỗi xóa học sinh:", error);
@@ -351,16 +435,33 @@ const App: React.FC = () => {
   if (!isLoggedIn) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-blue-900 p-4 font-sans">
-        <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md">
-          <div className="text-center mb-8">
-            <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+        <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md border border-blue-100">
+          <div className="text-center mb-6">
+            <div className="w-20 h-20 bg-blue-50 border-2 border-blue-200 rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-sm">
                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.148l.83-4.742c.033-.183.158-.334.329-.403a7.488 7.488 0 003.32-3.209c.148-.249.12-.566-.079-.784l-2.968-3.273a.75.75 0 00-1.071.01l-2.734 3.125a.75.75 0 00.115 1.13l3.235 2.146c.191.127.285.357.234.581l-.634 2.801" />
               </svg>
             </div>
-            <h1 className="text-2xl font-bold text-gray-800 uppercase tracking-tight">Hệ Thống Quản Lý</h1>
-            <p className="text-gray-500 text-sm mt-1">Vui lòng đăng nhập để quản lý lớp học</p>
+            <h1 className="text-2xl font-black text-gray-800 uppercase tracking-tight">Hệ Thống Quản Lý</h1>
+            <p className="text-gray-500 text-xs mt-1">Đăng nhập tài khoản giáo viên để quản lý lớp học</p>
+
+            {/* Trạng thái tải trước dữ liệu ngầm */}
+            <div className="mt-3.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold">
+              {isPreloadReady || students.length > 0 ? (
+                <span className="bg-emerald-50 text-emerald-700 border border-emerald-200/80 px-3 py-0.5 rounded-full inline-flex items-center gap-1.5 shadow-xs">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <Zap className="w-3 h-3 text-emerald-600 fill-emerald-500" />
+                  Dữ liệu đã sẵn sàng (Vào tức thì 0s)
+                </span>
+              ) : (
+                <span className="bg-blue-50 text-blue-700 border border-blue-200 px-3 py-0.5 rounded-full inline-flex items-center gap-1.5 shadow-xs">
+                  <Loader2 className="w-3 h-3 animate-spin text-blue-600" />
+                  Đang nạp trước Google Sheets ngầm...
+                </span>
+              )}
+            </div>
           </div>
+
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-gray-500 mb-1 uppercase tracking-wider">Tên đăng nhập</label>
@@ -368,7 +469,7 @@ const App: React.FC = () => {
                 type="text" 
                 value={user.username}
                 onChange={(e) => setUser({...user, username: e.target.value})}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all" 
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium text-gray-800" 
                 placeholder="lehoahiep"
               />
             </div>
@@ -378,15 +479,40 @@ const App: React.FC = () => {
                 type="password" 
                 value={user.password}
                 onChange={(e) => setUser({...user, password: e.target.value})}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all" 
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium text-gray-800" 
                 placeholder="••••••••"
               />
             </div>
-            <button className="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg active:scale-95">
-              ĐĂNG NHẬP NGAY
+
+            <div className="flex items-center justify-between pt-1 pb-1">
+              <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-gray-600 font-semibold">
+                <input 
+                  type="checkbox" 
+                  checked={rememberLogin} 
+                  onChange={(e) => setRememberLogin(e.target.checked)}
+                  className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer"
+                />
+                <span>Ghi nhớ đăng nhập trên thiết bị này</span>
+              </label>
+            </div>
+
+            <button 
+              type="submit"
+              disabled={loading}
+              className="w-full bg-blue-700 hover:bg-blue-800 text-white font-black py-3.5 rounded-xl transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-75"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>ĐANG ĐỒNG BỘ DỮ LIỆU...</span>
+                </>
+              ) : (
+                <span>ĐĂNG NHẬP NGAY</span>
+              )}
             </button>
           </form>
-          <div className="mt-8 text-center text-[10px] text-gray-400 italic">
+
+          <div className="mt-6 pt-4 border-t border-gray-100 text-center text-[10px] text-gray-400 italic">
             Create by Hoà Hiệp - 0983.676.470
           </div>
         </div>
@@ -408,16 +534,43 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          <button 
-            onClick={() => setShowSettings(!showSettings)}
-            className={`p-2.5 rounded-xl transition-all flex items-center gap-2 border ${showSettings ? 'bg-white text-blue-800 border-white' : 'bg-blue-900/50 text-white border-blue-700 hover:bg-blue-700'}`}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className={`h-5 w-5 transition-transform duration-500 ${showSettings ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            <span className="text-[10px] font-black uppercase tracking-widest hidden sm:inline">Cấu hình</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Nút Làm mới / Đồng bộ dữ liệu thủ công */}
+            <button 
+              onClick={() => loadData(true)}
+              title="Bấm để đồng bộ dữ liệu mới nhất từ Google Sheets"
+              disabled={isBackgroundSyncing || loading}
+              className="p-2 sm:px-3 sm:py-2 rounded-xl transition-all flex items-center gap-1.5 border bg-blue-900/50 hover:bg-blue-700 text-white border-blue-700 active:scale-95 disabled:opacity-60 cursor-pointer"
+            >
+              <RefreshCw className={`h-4 w-4 ${isBackgroundSyncing ? 'animate-spin text-amber-400' : 'text-blue-200'}`} />
+              <span className="text-[10px] font-bold uppercase tracking-wider hidden sm:inline">
+                {isBackgroundSyncing ? 'Đang đồng bộ...' : (lastSyncTime ? `Đồng bộ: ${lastSyncTime.split(' ngày')[0]}` : 'Làm mới')}
+              </span>
+            </button>
+
+            {/* Nút Cấu hình */}
+            <button 
+              onClick={() => setShowSettings(!showSettings)}
+              className={`p-2 sm:px-3 sm:py-2 rounded-xl transition-all flex items-center gap-1.5 border cursor-pointer ${showSettings ? 'bg-white text-blue-800 border-white' : 'bg-blue-900/50 text-white border-blue-700 hover:bg-blue-700'}`}
+              title="Cấu hình hệ thống"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 transition-transform duration-500 ${showSettings ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <span className="text-[10px] font-black uppercase tracking-widest hidden md:inline">Cấu hình</span>
+            </button>
+
+            {/* Nút Đăng xuất */}
+            <button 
+              onClick={handleLogout}
+              className="p-2 sm:px-3 sm:py-2 rounded-xl transition-all flex items-center gap-1.5 border bg-red-900/40 hover:bg-red-700/80 text-red-200 border-red-700/60 active:scale-95 cursor-pointer"
+              title="Đăng xuất khỏi hệ thống"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="text-[10px] font-black uppercase tracking-widest hidden md:inline">Đăng xuất</span>
+            </button>
+          </div>
         </div>
 
         {/* Collapsible Settings Area */}
@@ -425,7 +578,7 @@ const App: React.FC = () => {
           <div className="container mx-auto px-4 flex flex-wrap items-center justify-center gap-6">
             <div className="flex items-center gap-3 bg-blue-950/50 p-2.5 rounded-2xl border border-blue-700/50 shadow-inner">
                <input 
-                 type="password"
+                 type="password" 
                  placeholder="Dán API Key vào đây..."
                  value={apiKey}
                  onChange={(e) => setApiKey(e.target.value)}
@@ -433,7 +586,7 @@ const App: React.FC = () => {
                />
                <button 
                   onClick={handleSaveApiKey}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black px-5 py-3 rounded-xl transition-all shadow-lg active:scale-95 uppercase"
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black px-5 py-3 rounded-xl transition-all shadow-lg active:scale-95 uppercase cursor-pointer"
                 >
                   LƯU KEY
                 </button>
@@ -443,13 +596,13 @@ const App: React.FC = () => {
               <span className="text-[9px] font-black uppercase text-blue-300 px-3 tracking-widest">Model:</span>
               <button 
                 onClick={() => setModelMode(ModelMode.FLASH)}
-                className={`px-5 py-2 rounded-xl text-[10px] font-bold transition-all ${modelMode === ModelMode.FLASH ? 'bg-white text-blue-800 shadow-md' : 'text-blue-200 hover:text-white'}`}
+                className={`px-5 py-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer ${modelMode === ModelMode.FLASH ? 'bg-white text-blue-800 shadow-md' : 'text-blue-200 hover:text-white'}`}
               >
                 Flash
               </button>
               <button 
                 onClick={() => setModelMode(ModelMode.PRO)}
-                className={`px-5 py-2 rounded-xl text-[10px] font-bold transition-all ${modelMode === ModelMode.PRO ? 'bg-white text-blue-800 shadow-md' : 'text-blue-200 hover:text-white'}`}
+                className={`px-5 py-2 rounded-xl text-[10px] font-bold transition-all cursor-pointer ${modelMode === ModelMode.PRO ? 'bg-white text-blue-800 shadow-md' : 'text-blue-200 hover:text-white'}`}
               >
                 Pro
               </button>
@@ -477,7 +630,7 @@ const App: React.FC = () => {
                     setTempSelection('');
                   }
                 }}
-                className={`flex items-center gap-2 px-4 py-3 border-b-4 font-bold text-xs transition-all whitespace-nowrap ${
+                className={`flex items-center gap-2 px-4 py-3 border-b-4 font-bold text-xs transition-all whitespace-nowrap cursor-pointer ${
                   activeTab === tab.id 
                   ? 'border-white bg-white/10 text-white' 
                   : 'border-transparent text-blue-200 hover:text-white hover:bg-white/5'
@@ -494,12 +647,28 @@ const App: React.FC = () => {
       </header>
 
       <main className="flex-grow container mx-auto px-4 py-8">
+        {/* Loading overlay khi chưa có dữ liệu ban đầu */}
         {loading && (
-          <div className="fixed inset-0 bg-white/60 backdrop-blur-sm z-[100] flex items-center justify-center">
-            <div className="flex flex-col items-center">
-              <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-700 mb-4 shadow-xl"></div>
-              <p className="text-blue-900 font-black animate-pulse uppercase tracking-widest text-xs">Đang xử lý dữ liệu...</p>
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+            <div className="bg-white p-8 rounded-3xl shadow-2xl border border-blue-100 flex flex-col items-center max-w-sm text-center">
+              <div className="animate-spin rounded-full h-14 w-14 border-t-4 border-b-4 border-blue-700 mb-4 shadow-md"></div>
+              <h3 className="text-base font-black text-blue-900 uppercase tracking-tight">Đang tải dữ liệu Google Sheets</h3>
+              <p className="text-xs text-gray-500 mt-2 leading-relaxed">
+                Hệ thống đang đồng bộ danh sách học sinh và lịch dạy...
+              </p>
+              <div className="text-[11px] text-emerald-800 font-bold mt-4 bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-200 flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 text-emerald-600 fill-emerald-500 shrink-0" />
+                <span>Lần truy cập tiếp theo sẽ mở tức thì (0s) nhờ bộ nhớ đệm</span>
+              </div>
             </div>
+          </div>
+        )}
+
+        {/* Thông báo đồng bộ nền mượt mà, không chặn thao tác */}
+        {isBackgroundSyncing && !loading && (
+          <div className="fixed bottom-4 right-4 z-50 bg-slate-900/90 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-2xl backdrop-blur-md flex items-center gap-2.5 border border-slate-700">
+            <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-400" />
+            <span>Đang cập nhật ngầm từ Datasheet...</span>
           </div>
         )}
 
