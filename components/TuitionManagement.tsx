@@ -324,6 +324,11 @@ const TuitionManagement: React.FC<TuitionManagementProps> = ({ students, onRefre
 
           await apiService.saveStudent('updateData', updatedStudentData, student.rowIndex);
           updatedCount++;
+
+          // Giãn cách nhẹ 150ms để tránh kẹt lock script trên Google Apps Script khi cập nhật nhiều bạn
+          if (i < targetStudents.length - 1) {
+            await new Promise(r => setTimeout(r, 150));
+          }
         }
 
         setSavingProgress({ current: i + 1, total: targetStudents.length });

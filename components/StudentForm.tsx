@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Student, TeacherSchedule } from '../types';
+import { Loader2 } from 'lucide-react';
 
 interface StudentFormProps {
   initialData?: Partial<Student>;
-  onSubmit: (data: Partial<Student>) => void;
+  onSubmit: (data: Partial<Student>) => void | Promise<void>;
   onDelete?: (student: Partial<Student>) => void;
   title: string;
   teacherSchedules?: TeacherSchedule[];
@@ -45,6 +46,7 @@ const StudentForm: React.FC<StudentFormProps> = ({
   const [isTutoring, setIsTutoring] = useState(false);
   const [isDroppedOut, setIsDroppedOut] = useState(false);
   const [isCustomGroup, setIsCustomGroup] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (initialData) {
@@ -211,13 +213,20 @@ const StudentForm: React.FC<StudentFormProps> = ({
     setFormData(prev => ({ ...prev, [field]: newVal.join(' ') }));
   };
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
+    const studentName = String(formData['HỌ TÊN HS'] || '').trim();
+    if (!studentName) {
+      alert("Vui lòng nhập Họ và tên học sinh!");
+      return;
+    }
     
-    const submissionData = { ...formData };
+    const submissionData = { ...formData, 'HỌ TÊN HS': studentName };
     
     // Đảm bảo các trường ngày luôn ở định dạng YYYY-MM-DD chuẩn hoá
-    submissionData['NGÀY BẮT ĐẦU'] = cleanDateStr(submissionData['NGÀY BẮT ĐẦU']);
+    submissionData['NGÀY BẮT ĐẦU'] = cleanDateStr(submissionData['NGÀY BẮT ĐẦU']) || cleanDateStr(new Date());
     
     if (submissionData['LỊCH HỌC']) {
       submissionData['LỊCH HỌC'] = submissionData['LỊCH HỌC'].split(' ').filter(d => d).map(d => cleanDateStr(d)).join(' ');
@@ -239,8 +248,16 @@ const StudentForm: React.FC<StudentFormProps> = ({
       }
       submissionData['KHỐI'] = finalKhoi;
     }
+
+    // Luôn đồng bộ TÊN NHÓM với KHỐI để tránh trống cột trên Google Sheet
+    submissionData['TÊN NHÓM'] = submissionData['KHỐI'];
     
-    onSubmit(submissionData);
+    setIsSubmitting(true);
+    try {
+      await onSubmit(submissionData);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const scheduleArray = (formData['LỊCH HỌC'] || '').split(' ').filter(d => d).map(d => cleanDateStr(d));
@@ -672,12 +689,26 @@ const StudentForm: React.FC<StudentFormProps> = ({
           <button 
             type="submit" 
             id="btn-submit-student"
-            className="flex-1 w-full bg-blue-700 hover:bg-blue-800 text-white font-black py-5 rounded-2xl shadow-xl transition-all transform hover:-translate-y-1 flex items-center justify-center gap-3 active:scale-[0.98] order-1 sm:order-2 cursor-pointer"
+            disabled={isSubmitting}
+            className={`flex-1 w-full text-white font-black py-5 rounded-2xl shadow-xl transition-all transform flex items-center justify-center gap-3 active:scale-[0.98] order-1 sm:order-2 ${
+              isSubmitting 
+                ? 'bg-blue-400 cursor-not-allowed opacity-80' 
+                : 'bg-blue-700 hover:bg-blue-800 hover:-translate-y-1 cursor-pointer'
+            }`}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-            </svg>
-            {initialData?.rowIndex ? 'LƯU CẬP NHẬT DỮ LIỆU' : 'GHI DANH HỌC SINH MỚI'}
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-6 w-6 animate-spin text-white" />
+                <span>ĐANG LƯU DỮ LIỆU...</span>
+              </>
+            ) : (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                </svg>
+                <span>{initialData?.rowIndex ? 'LƯU CẬP NHẬT DỮ LIỆU' : 'GHI DANH HỌC SINH MỚI'}</span>
+              </>
+            )}
           </button>
         </div>
       </form>

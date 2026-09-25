@@ -175,8 +175,7 @@ const TeacherScheduleComponent: React.FC<TeacherScheduleProps> = ({ onRefresh, s
     }
 
     if (newDates.length === 0) {
-      const confirmNoDates = window.confirm("Bạn chưa chọn ngày dạy dự kiến nào. Bạn có chắc chắn muốn tạo lịch với danh sách ngày trống?");
-      if (!confirmNoDates) return;
+      console.info("Tạo lịch dạy với danh sách ngày trống ban đầu");
     }
 
     setLoading(true);
@@ -190,19 +189,33 @@ const TeacherScheduleComponent: React.FC<TeacherScheduleProps> = ({ onRefresh, s
       await apiService.saveTeacherSchedule(payload);
       alert(`Đã tạo lịch dạy "${nameTrimmed}" thành công và lưu vào cột TÊN NHÓM!`);
 
+      // Cập nhật lạc quan vào danh sách lịch dạy cục bộ
+      setSchedules(prev => {
+        const maxRow = prev.length > 0 ? Math.max(...prev.map(s => Number(s.rowIndex) || 0)) : 1;
+        const newSched = {
+          ...payload,
+          rowIndex: maxRow + 1,
+          STT: maxRow
+        };
+        const updated = [...prev, newSched];
+        apiService.setCachedData(undefined, updated);
+        return updated;
+      });
+
       // Reset form
       setNewScheduleName('');
       setNewDates([]);
       
-      // Reload danh sách
-      await loadSchedules();
-      if (onRefresh) await onRefresh();
-
       // Chuyển sang màn hình danh sách với nhóm vừa tạo
       setSelectedScheduleId(nameTrimmed);
       setActiveMode('list');
+
+      // Reload danh sách ngầm từ máy chủ
+      loadSchedules();
+      if (onRefresh) onRefresh();
     } catch (error: any) {
-      alert("Lỗi tạo lịch dạy: " + error.message);
+      console.error("Lỗi khi tạo lịch dạy mới:", error);
+      alert("Lỗi khi lưu dữ liệu mới: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -235,10 +248,19 @@ const TeacherScheduleComponent: React.FC<TeacherScheduleProps> = ({ onRefresh, s
       };
       await apiService.saveTeacherSchedule(data, selected.rowIndex);
       alert("Đã cập nhật lịch dạy thành công!");
-      await loadSchedules();
-      if (onRefresh) await onRefresh();
+
+      // Cập nhật lạc quan
+      setSchedules(prev => {
+        const updated = prev.map(s => s.rowIndex === selected.rowIndex ? { ...s, ...data } : s);
+        apiService.setCachedData(undefined, updated);
+        return updated;
+      });
+
+      loadSchedules();
+      if (onRefresh) onRefresh();
     } catch (error: any) {
-      alert("Lỗi cập nhật: " + error.message);
+      console.error("Lỗi khi cập nhật lịch dạy:", error);
+      alert("Lỗi khi lưu dữ liệu cập nhật: " + error.message);
     } finally {
       setLoading(false);
     }

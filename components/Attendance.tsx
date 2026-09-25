@@ -18,17 +18,18 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
   const [onlyScheduled, setOnlyScheduled] = useState<boolean>(true);
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [showPreviewModal, setShowPreviewModal] = useState<boolean>(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type?: 'success' | 'info' | 'error' } | null>(null);
+  const [saveProgress, setSaveProgress] = useState<{ current: number; total: number } | null>(null);
 
   const reportJpegRef = useRef<HTMLDivElement>(null);
   const previewModalRef = useRef<HTMLDivElement>(null);
 
   // Hiển thị toast thông báo
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
+  const showToast = (message: string, type: 'success' | 'info' | 'error' = 'success') => {
+    setToast({ message, type });
     setTimeout(() => {
-      setToastMessage(null);
-    }, 4000);
+      setToast(null);
+    }, 4500);
   };
 
   // Đồng bộ danh sách học sinh vắng từ cơ sở dữ liệu dựa trên ngày điểm danh
@@ -245,6 +246,8 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
 
   // Lưu điểm danh vào Google Sheet / Database
   const handleSaveAttendance = async () => {
+    if (saving) return;
+
     const updates = students.map(student => {
       const isNowAbsent = selectedIds.has(student.rowIndex!);
       const currentAbsencesList = (student['ĐIỂM DANH HS'] || '').split(' ').filter(d => d).map(d => cleanDateStr(d));
@@ -273,25 +276,31 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
     }).filter(item => item !== null);
 
     if (updates.length === 0) {
-      alert("Không có thay đổi nào để lưu!");
+      showToast(`ℹ Dữ liệu điểm danh ngày ${attendanceDate} đã được lưu đầy đủ, không có thay đổi mới!`, 'info');
       return;
     }
 
-    if (!confirm(`Xác nhận cập nhật điểm danh ngày ${attendanceDate} cho ${updates.length} học sinh?`)) return;
-
     setSaving(true);
-    try {
-      const updatePromises = updates.map(update => 
-        apiService.saveStudent('updateData', update!.data, update!.rowIndex)
-      );
+    setSaveProgress({ current: 0, total: updates.length });
 
-      await Promise.all(updatePromises);
-      showToast("✓ Đã lưu điểm danh thành công lên hệ thống!");
+    try {
+      for (let i = 0; i < updates.length; i++) {
+        const update = updates[i]!;
+        await apiService.saveStudent('updateData', update.data, update.rowIndex);
+        setSaveProgress({ current: i + 1, total: updates.length });
+        if (i < updates.length - 1) {
+          await new Promise(r => setTimeout(r, 120));
+        }
+      }
+
+      showToast(`✓ Đã lưu điểm danh ngày ${attendanceDate} thành công cho ${updates.length} học sinh!`, 'success');
       await onRefresh();
     } catch (error: any) {
-      alert("Lỗi khi lưu điểm danh: " + error.message);
+      console.error("Lỗi khi lưu điểm danh:", error);
+      showToast("Lỗi khi lưu điểm danh: " + (error?.message || 'Không thể kết nối máy chủ'), 'error');
     } finally {
       setSaving(false);
+      setSaveProgress(null);
     }
   };
 
@@ -332,10 +341,18 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
   return (
     <div className="space-y-4 animate-fadeIn pb-28 md:pb-12 max-w-7xl mx-auto">
       {/* Toast thông báo nhanh */}
-      {toastMessage && (
-        <div className="fixed top-5 right-5 z-[100] bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl text-xs font-bold flex items-center gap-3 border border-slate-700 animate-fadeIn">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-          <span>{toastMessage}</span>
+      {toast && (
+        <div className={`fixed top-5 right-5 z-[100] text-white px-5 py-3 rounded-2xl shadow-2xl text-xs font-bold flex items-center gap-3 border animate-fadeIn ${
+          toast.type === 'error'
+            ? 'bg-red-950 border-red-800 text-red-100'
+            : toast.type === 'info'
+            ? 'bg-blue-950 border-blue-800 text-blue-100'
+            : 'bg-slate-900 border-slate-700 text-white'
+        }`}>
+          <span className={`w-2 h-2 rounded-full ${
+            toast.type === 'error' ? 'bg-red-400' : toast.type === 'info' ? 'bg-blue-400' : 'bg-emerald-400'
+          } animate-ping`}></span>
+          <span>{toast.message}</span>
         </div>
       )}
 
@@ -670,12 +687,19 @@ const Attendance: React.FC<AttendanceProps> = ({ students, onRefresh }) => {
           disabled={saving}
           className={`flex-1 py-3.5 px-4 rounded-2xl font-black shadow-2xl transition-all active:scale-95 flex items-center justify-center gap-2 ${
             !saving 
-              ? 'bg-blue-700 hover:bg-blue-800 text-white animate-bounce-short' 
-              : 'bg-gray-400 text-white cursor-not-allowed'
+              ? 'bg-blue-700 hover:bg-blue-800 text-white cursor-pointer' 
+              : 'bg-blue-500 text-white cursor-not-allowed opacity-90'
           }`}
         >
           {saving ? (
-            <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+            <div className="flex items-center gap-2">
+              <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+              <span className="text-xs uppercase">
+                {saveProgress 
+                  ? `ĐANG LƯU (${saveProgress.current}/${saveProgress.total})...` 
+                  : 'ĐANG LƯU ĐIỂM DANH...'}
+              </span>
+            </div>
           ) : (
             <>
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
